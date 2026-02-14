@@ -275,10 +275,20 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
         // 2. Execute Trade against Portfolio State (if price/units exist)
         if (newEntry.units && newEntry.price) {
+            console.log(`[SmartFolio] Processing trade: ${newEntry.type} ${newEntry.units} ${newEntry.symbol} @ ${newEntry.price}`);
             setAssets(currentAssets => {
-                const assetIndex = currentAssets.findIndex(a => a.symbol === newEntry.symbol);
+                const targetSymbol = newEntry.symbol.trim().toUpperCase();
+                const assetIndex = currentAssets.findIndex(a => a.symbol.toUpperCase() === targetSymbol);
                 const cashIndex = currentAssets.findIndex(a => a.symbol === 'USD');
-                if (assetIndex === -1 || cashIndex === -1) return currentAssets; // Safety check
+
+                if (assetIndex === -1) {
+                    console.warn(`[SmartFolio] Asset not found for trade: ${targetSymbol} (Available: ${currentAssets.map(a => a.symbol).join(', ')})`);
+                    return currentAssets;
+                }
+                if (cashIndex === -1) {
+                    console.error('[SmartFolio] Cash asset (USD) not found!');
+                    return currentAssets;
+                }
 
                 const next = [...currentAssets];
                 const asset = next[assetIndex];
@@ -312,6 +322,7 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
                     };
                 }
 
+                console.log(`[SmartFolio] Trade executed. New ${targetSymbol} units: ${next[assetIndex].units}, New Cash: ${next[cashIndex].units}`);
                 return next;
             });
         }
