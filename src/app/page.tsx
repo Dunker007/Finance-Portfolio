@@ -1,66 +1,88 @@
-import Image from "next/image";
-import styles from "./page.module.css";
+"use client";
+import React from 'react';
+import AssetTable from '@/components/AssetTable';
+import DetailedMetrics from '@/components/DetailedMetrics';
+import AIAnalyst from '@/components/AIAnalyst';
+import PendingOrders from '@/components/PendingOrders';
+import AllocationChart from '@/components/AllocationChart';
+import PriceTicker from '@/components/PriceTicker';
 
 export default function Home() {
+  const [mounted, setMounted] = React.useState(false);
+  const [syncTime, setSyncTime] = React.useState("");
+
+  React.useEffect(() => {
+    setMounted(true);
+    setSyncTime(new Date().toLocaleTimeString());
+  }, []);
+
   return (
-    <div className={styles.page}>
-      <main className={styles.main}>
-        <Image
-          className={styles.logo}
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className={styles.intro}>
-          <h1>To get started, edit the page.tsx file.</h1>
-          <p>
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <>
+      {/* Dynamic Background Effect */}
+      <div className="fixed inset-0 pointer-events-none opacity-20 z-0 text-white">
+        <div className="absolute top-0 left-1/4 w-96 h-96 bg-blue-900/40 blur-[150px] rounded-full animate-pulse"></div>
+        <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-purple-900/30 blur-[150px] rounded-full animate-pulse delay-1000"></div>
+      </div>
+
+      <header className="h-16 flex items-center justify-between px-8 glass-panel z-50 shrink-0 border-b border-white/5 bg-black/40">
+        <div className="flex items-center gap-4">
+          <span className="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">AGENT_CONNECTED</span>
+          <div className="h-4 w-px bg-white/10 mx-2"></div>
+          <span className="text-[10px] font-mono text-gray-500 tracking-tighter lowercase opacity-50">
+            last_sync: {mounted ? syncTime : "--:--:--"}
+          </span>
         </div>
-        <div className={styles.ctas}>
-          <a
-            className={styles.primary}
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className={styles.logo}
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className={styles.secondary}
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+
+        <div className="flex items-center gap-6">
+          <div className="hidden lg:flex items-center gap-3 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10">
+            <span className="text-[10px] text-blue-400 font-black tracking-widest uppercase">Target Mask</span>
+            <span className="text-[11px] font-mono text-gray-400">50:25:25 (SUI/ALT/USD)</span>
+          </div>
+          <div className="flex flex-col items-end">
+            <span className="text-[10px] text-gray-400 font-bold uppercase tracking-[0.2em] opacity-50">Anchor Weight</span>
+            <span className="text-sm font-black text-blue-400 tracking-tight">82.4% SUI</span>
+          </div>
         </div>
+      </header>
+
+      <main className="flex-1 overflow-y-auto p-6 space-y-6 relative z-10 scroll-smooth custom-scrollbar">
+        {/* Top Metrics Row */}
+        <section className="animate-fade-in-up">
+          <DetailedMetrics />
+        </section>
+
+        {/* Global Market Pulse */}
+        <section className="animate-fade-in-up delay-75">
+          <PriceTicker />
+        </section>
+
+        {/* Allocation Monitor Tier */}
+        <section className="glass-card p-6 min-h-[360px] animate-fade-in-up delay-100">
+          <AllocationChart />
+        </section>
+
+        {/* Strategy Hub & Order Command */}
+        <section className="grid grid-cols-1 lg:grid-cols-12 gap-6 min-h-[450px]">
+          {/* AI Strategy Node */}
+          <div className="glass-card lg:col-span-4 p-0 overflow-hidden flex flex-col h-full border-l-4 border-l-blue-500/50">
+            <div className="h-full bg-gradient-to-b from-blue-900/5 to-transparent">
+              <AIAnalyst />
+            </div>
+          </div>
+
+          {/* Pending Strategy Logs */}
+          <div className="glass-card lg:col-span-8 p-0 h-full overflow-hidden">
+            <PendingOrders />
+          </div>
+        </section>
+
+        {/* Global Positions Ledger */}
+        <section className="glass-card p-0 overflow-hidden min-h-[500px] animate-fade-in-up delay-150">
+          <AssetTable />
+        </section>
+
+        <div className="h-10"></div> {/* Bottom Buffer */}
       </main>
-    </div>
+    </>
   );
 }
