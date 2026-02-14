@@ -104,7 +104,7 @@ export default function AllocationChart() {
                     <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
                         <span className="text-[10px] text-gray-500 uppercase tracking-[0.2em] font-black">Strategy Weight</span>
                         <div className="flex flex-col -space-y-1">
-                            <span className="text-5xl font-black font-mono text-white">82%</span>
+                            <span className="text-5xl font-black font-mono text-white">{Math.round(sorted.find(a => a.symbol === 'SUI')?.allocation ?? 0)}%</span>
                             <span className="text-sm font-bold text-blue-500/80 uppercase tracking-tighter">SUI Anchor</span>
                         </div>
                     </div>

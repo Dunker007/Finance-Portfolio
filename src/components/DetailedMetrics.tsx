@@ -1,6 +1,7 @@
 "use client";
 import React from 'react';
 import { usePortfolio } from '../context/PortfolioContext';
+import { STRATEGY, getCashHealth } from '../data/strategy';
 
 const currency = new Intl.NumberFormat('en-US', {
     style: 'currency',
@@ -72,9 +73,10 @@ export default function DetailedMetrics() {
     const percentChange = ((totalGainLoss / (totalValue - totalGainLoss)) * 100).toFixed(2);
     const trendSign = Number(percentChange) >= 0 ? '+' : '';
 
-    const cashTarget = 25.0;
+    const cashTarget = STRATEGY.targets.cash.ideal;
     const currentCashPercent = (cashBalance / totalValue) * 100;
     const cashGap = cashTarget - currentCashPercent;
+    const cashStatus = getCashHealth(currentCashPercent);
 
     return (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
@@ -112,8 +114,8 @@ export default function DetailedMetrics() {
             <Metric
                 label="Cash Reserve Gap"
                 value={fmtPercent(currentCashPercent)}
-                color={cashGap > 5 ? 'text-rose-400' : 'text-emerald-400'}
-                trend={`Needs ${cashGap.toFixed(1)}% to Target`}
+                color={cashStatus === 'CRITICAL' ? 'text-rose-400' : cashStatus === 'UNDER' ? 'text-amber-400' : 'text-emerald-400'}
+                trend={cashStatus === 'CRITICAL' ? `⚠ CRITICAL — needs ${cashGap.toFixed(0)}% to target` : `Needs ${cashGap.toFixed(1)}% to ${cashTarget}%`}
             />
         </div>
     );

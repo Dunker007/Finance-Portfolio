@@ -1,19 +1,16 @@
 "use client";
 import React, { useState, useEffect, useRef } from 'react';
+import { STRATEGY } from '../data/strategy';
 
 export default function AIAnalyst() {
     const [query, setQuery] = useState('');
     const [history, setHistory] = useState<{ role: 'user' | 'ai', text: string, timestamp: string }[]>([
-        { role: 'ai', text: "Systems online. Strategy locked: SUI is King. Core focus is long-term growth with opportunistic alt swinging. Current priority: Rebuilding cash reserve (5.6% -> 25%) via SUI laddered sells at $1.02 and $1.05. How can I assist with your rebalance today?", timestamp: 'Just now' }
+        { role: 'ai', text: `Strategy loaded: ${STRATEGY.name}. Mode: ${STRATEGY.mode} (${STRATEGY.taxWrapper}). Current priority: Cash reserve critically low (~5.7% vs 25% target). Laddered SUI exits at $1.02/$1.05 are the engine to fix this. Alt positions are tactical — enter dips, take 20-50% profits, recycle to SUI or cash. How can I assist?`, timestamp: 'Just now' }
     ]);
     const [isTyping, setIsTyping] = useState(false);
     const bottomRef = useRef<HTMLDivElement>(null);
 
-    const STRATEGY_RULES = [
-        "SUI is the Anchor (min 45% allocation)",
-        "Alts are Tactical (trim on 20-50% pumps)",
-        "Cash is the Safety Net (target 25%)"
-    ];
+    const RULES_DISPLAY = STRATEGY.rules.slice(0, 3).map(r => r.split('—')[0].trim());
 
     useEffect(() => {
         bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -33,13 +30,15 @@ export default function AIAnalyst() {
             const low = userText.toLowerCase();
 
             if (low.includes('sui') || low.includes('trim')) {
-                response = "The laddered SUI exit ($1.02/$1.05) is tactical brilliance. It captures the current pump without sacrificing the 'King' position. If filled, we replenish USDC dry powder by ~30%, significantly improving our defensive posture.";
+                response = `The laddered SUI exits ($1.02/$1.05) capture strength without killing the King position. If both fill → ~$1,155 proceeds. Split: ${STRATEGY.suiTrimStrategy.exampleSplit.suiDipBuysLater}% to SUI dip buys later, ${STRATEGY.suiTrimStrategy.exampleSplit.altSwings}% to alt swings, ${STRATEGY.suiTrimStrategy.exampleSplit.cashReserve}% straight to cash. This is the #1 priority trade right now.`;
             } else if (low.includes('alt') || low.includes('link') || low.includes('aave')) {
-                response = "LINK and AAVE are our primary swing candidates. We enter on -10% pullbacks and recycle gains directly back into SUI or the Cash Reserve. We're currently under-allocated to alts (13% vs 25%), so I'm watching for dip entry triggers.";
+                response = `LINK and AAVE are the primary swing candidates. We enter on ~${STRATEGY.thresholds.altDipEntryPercent}% pullbacks and take profits at ${STRATEGY.thresholds.altProfitTakeMin}-${STRATEGY.thresholds.altProfitTakeMax}% gains. All profits get recycled to SUI or Cash. Currently under-allocated to alts (~13% vs 25%), watching for dip entries. Remember: alts are tactical ONLY — never HODL forever.`;
             } else if (low.includes('cash') || low.includes('reserve')) {
-                response = "Priority #1. At 5.6%, we're 'cash poor'. The SUI trim is the engine for the fix. Once we hit 15% USDC, we'll shift from 'aggressive recovery' back to 'patient accumulation'.";
-            } else if (low.includes('plan')) {
-                response = "Next 24 Hours:\n1. Track SUI momentum toward $1.02.\n2. Keep dip-buy orders live for LINK ($7.92) & IMX ($0.149).\n3. Maintain patient bias. No market buys.";
+                response = `CRITICAL priority. At ~5.7%, we're well below the ${STRATEGY.thresholds.cashCriticalBelow}% emergency line. The SUI ladder is the engine to fix this. Once we hit ${STRATEGY.thresholds.cashHealthyAbove}% USDC, we shift from 'aggressive recovery' to 'patient accumulation'. No new alt entries until cash is above 15%.`;
+            } else if (low.includes('plan') || low.includes('next')) {
+                response = "Today/Tomorrow Action Items:\n1. Monitor SUI momentum — $1.00-$1.05 zone is the trim target.\n2. Keep dip-buy orders live: LINK @ $7.92, IMX @ $0.149.\n3. Clean stale orders (old IMX sells, BTC buy if outdated).\n4. NO market buys — patience and limits only.\n5. All inside Roth = tax-free gains. No rush.";
+            } else if (low.includes('manual') || low.includes('api') || low.includes('alto')) {
+                response = "Alto has no functional trading APIs. All orders must be placed manually through the Alto platform. This dashboard is your strategy command center — use it to plan, simulate, and track. Execute trades by hand on Alto's interface.";
             }
 
             setHistory(prev => [...prev, { role: 'ai', text: response, timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }]);
@@ -66,7 +65,7 @@ export default function AIAnalyst() {
 
             {/* Quick Stats Overlay */}
             <div className="p-2 flex gap-2 overflow-x-auto whitespace-nowrap scrollbar-hide border-b border-white/5 bg-black/40">
-                {STRATEGY_RULES.map((rule, i) => (
+                {RULES_DISPLAY.map((rule, i) => (
                     <div key={i} className="px-2 py-1 rounded bg-white/5 border border-white/10 text-[9px] text-gray-500 font-mono uppercase">
                         {rule}
                     </div>
@@ -78,8 +77,8 @@ export default function AIAnalyst() {
                 {history.map((msg, i) => (
                     <div key={i} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'} animate-fade-in-up`}>
                         <div className={`max-w-[85%] p-3 rounded-xl text-xs leading-relaxed ${msg.role === 'user'
-                                ? 'bg-blue-600 text-white rounded-tr-none'
-                                : 'bg-white/5 text-gray-300 border border-white/10 rounded-tl-none'
+                            ? 'bg-blue-600 text-white rounded-tr-none'
+                            : 'bg-white/5 text-gray-300 border border-white/10 rounded-tl-none'
                             }`}>
                             {msg.text}
                         </div>

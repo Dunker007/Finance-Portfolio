@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import './globals.css';
 import Sidebar from '@/components/Sidebar';
+import { PortfolioProvider } from '@/context/PortfolioContext';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -9,8 +10,6 @@ export const metadata: Metadata = {
   title: 'Smart Folio - AI Crypto Tracker',
   description: 'AI-powered crypto portfolio management',
 };
-
-import { PortfolioProvider } from '@/context/PortfolioContext';
 
 export default function RootLayout({
   children,

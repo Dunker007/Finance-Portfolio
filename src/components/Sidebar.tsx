@@ -1,6 +1,5 @@
 "use client";
 import Link from 'next/link';
-import { FC } from 'react';
 
 import { usePortfolio } from '../context/PortfolioContext';
 

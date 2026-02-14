@@ -26,29 +26,33 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     const cashBalance = assets.find(a => a.symbol === 'USD')?.currentValue || 0;
     const totalValue = assets.reduce((sum, a) => sum + a.currentValue, 0);
 
-    // Simulate Market Movement (Deterministic but Local)
+    // Simulate Market Movement — allocation computed inside the updater to avoid stale closures
     useEffect(() => {
         const interval = setInterval(() => {
-            setAssets(prev => prev.map(asset => {
-                if (asset.symbol === 'USD') return asset;
+            setAssets(prev => {
+                const updated = prev.map(asset => {
+                    if (asset.symbol === 'USD') return asset;
 
-                const volatility = asset.symbol === 'SUI' ? 0.0005 : 0.001;
-                const change = 1 + (Math.random() * volatility * 2 - volatility);
-                const newPrice = asset.currentPrice * change;
-                const newValue = asset.units * newPrice;
+                    const volatility = asset.symbol === 'SUI' ? 0.0005 : 0.001;
+                    const change = 1 + (Math.random() * volatility * 2 - volatility);
+                    const newPrice = asset.currentPrice * change;
+                    const newValue = asset.units * newPrice;
 
-                return {
-                    ...asset,
-                    currentPrice: newPrice,
-                    currentValue: newValue,
-                    gainLoss: newValue - (asset.totalCost || 0),
-                    allocation: (newValue / totalValue) * 100
-                };
-            }));
+                    return {
+                        ...asset,
+                        currentPrice: newPrice,
+                        currentValue: newValue,
+                        gainLoss: newValue - (asset.totalCost || 0),
+                    };
+                });
+                // Recompute allocations from the fresh total
+                const freshTotal = updated.reduce((s, a) => s + a.currentValue, 0);
+                return updated.map(a => ({ ...a, allocation: (a.currentValue / freshTotal) * 100 }));
+            });
         }, 5000);
 
         return () => clearInterval(interval);
-    }, [totalValue]);
+    }, []); // stable — no external deps
 
     const recyclePnL = useCallback((symbol: string) => {
         setAssets(prev => {
@@ -91,32 +95,32 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }, []);
 
     const fillOrder = useCallback((id: string) => {
-        setPendingOrders(prev => {
-            const order = prev.find(o => o.id === id);
-            if (!order) return prev;
+        // Read the order before mutating state to avoid nesting setters
+        const order = pendingOrders.find(o => o.id === id);
+        if (!order) return;
 
-            // Simple fill logic: move to assets or update units
-            setAssets(currentAssets => {
-                const assetIndex = currentAssets.findIndex(a => a.symbol === order.symbol);
-                const cost = order.units * order.price;
+        // 1. Update assets
+        setAssets(currentAssets => {
+            const assetIndex = currentAssets.findIndex(a => a.symbol === order.symbol);
+            const cost = order.units * order.price;
 
-                if (assetIndex !== -1) {
-                    const asset = currentAssets[assetIndex];
-                    const next = [...currentAssets];
-                    next[assetIndex] = {
-                        ...asset,
-                        units: asset.units + (order.type === 'buy' ? order.units : -order.units),
-                        totalCost: (asset.totalCost || 0) + (order.type === 'buy' ? cost : -cost),
-                        currentValue: (asset.units + (order.type === 'buy' ? order.units : -order.units)) * asset.currentPrice
-                    };
-                    return next;
-                }
-                return currentAssets;
-            });
-
-            return prev.filter(o => o.id !== id);
+            if (assetIndex !== -1) {
+                const asset = currentAssets[assetIndex];
+                const next = [...currentAssets];
+                next[assetIndex] = {
+                    ...asset,
+                    units: asset.units + (order.type === 'buy' ? order.units : -order.units),
+                    totalCost: (asset.totalCost || 0) + (order.type === 'buy' ? cost : -cost),
+                    currentValue: (asset.units + (order.type === 'buy' ? order.units : -order.units)) * asset.currentPrice
+                };
+                return next;
+            }
+            return currentAssets;
         });
-    }, []);
+
+        // 2. Remove the order separately
+        setPendingOrders(prev => prev.filter(o => o.id !== id));
+    }, [pendingOrders]);
 
     return (
         <PortfolioContext.Provider value={{
