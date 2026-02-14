@@ -6,6 +6,8 @@ import AIAnalyst from '@/components/AIAnalyst';
 import PendingOrders from '@/components/PendingOrders';
 import AllocationChart from '@/components/AllocationChart';
 import PriceTicker from '@/components/PriceTicker';
+import PortfolioHealth from '@/components/PortfolioHealth';
+import TradeJournal from '@/components/TradeJournal';
 import { usePortfolio } from '@/context/PortfolioContext';
 import { STRATEGY } from '@/data/strategy';
 
@@ -29,8 +31,8 @@ export default function Home() {
         <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-purple-900/30 blur-[150px] rounded-full animate-pulse delay-1000"></div>
       </div>
 
-      <header className="h-16 flex items-center justify-between px-8 glass-panel z-50 shrink-0 border-b border-white/5 bg-black/40">
-        <div className="flex items-center gap-4">
+      <header className="h-16 flex items-center justify-between px-4 pl-16 lg:pl-8 lg:px-8 glass-panel z-50 shrink-0 border-b border-white/5 bg-black/40">
+        <div className="flex items-center gap-2 lg:gap-4 flex-wrap">
           <span className="text-[10px] font-mono text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">MANUAL MODE</span>
           <div className="h-4 w-px bg-white/10 mx-2"></div>
           <span className="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">{STRATEGY.taxWrapper}</span>
@@ -63,6 +65,11 @@ export default function Home() {
           <PriceTicker />
         </section>
 
+        {/* Portfolio Health Monitor */}
+        <section className="glass-card p-6 animate-fade-in-up delay-100">
+          <PortfolioHealth />
+        </section>
+
         {/* Allocation Monitor Tier */}
         <section className="glass-card p-6 min-h-[360px] animate-fade-in-up delay-100">
           <AllocationChart />
@@ -86,6 +93,11 @@ export default function Home() {
         {/* Global Positions Ledger */}
         <section className="glass-card p-0 overflow-hidden min-h-[500px] animate-fade-in-up delay-150">
           <AssetTable />
+        </section>
+
+        {/* Trade Journal */}
+        <section className="glass-card p-6 min-h-[300px] animate-fade-in-up delay-200">
+          <TradeJournal />
         </section>
 
         <div className="h-10"></div> {/* Bottom Buffer */}

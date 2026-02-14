@@ -1,7 +1,27 @@
 "use client";
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { PORTFOLIO_DATA, Asset, Order } from '../data/portfolio';
 
+// ─── localStorage Keys ───
+const STORAGE_KEYS = {
+    assets: 'smartfolio_assets',
+    orders: 'smartfolio_orders',
+    recycled: 'smartfolio_recycled',
+    journal: 'smartfolio_journal',
+} as const;
+
+// ─── Journal Entry Type ───
+export interface JournalEntry {
+    id: string;
+    timestamp: string;
+    symbol: string;
+    type: 'buy' | 'sell' | 'note';
+    price?: number;
+    units?: number;
+    notes: string;
+}
+
+// ─── Context Interface ───
 interface PortfolioContextType {
     totalValue: number;
     cashBalance: number;
@@ -9,18 +29,80 @@ interface PortfolioContextType {
     pendingOrders: Order[];
     recycledToSui: number;
     marketTrends: Record<string, number[]>;
+    journal: JournalEntry[];
+    mounted: boolean;
     recyclePnL: (symbol: string) => void;
     fillOrder: (orderId: string) => void;
     killOrder: (orderId: string) => void;
+    addJournalEntry: (entry: Omit<JournalEntry, 'id' | 'timestamp'>) => void;
+    resetToDefaults: () => void;
+    exportData: () => string;
+    importData: (json: string) => boolean;
 }
 
 const PortfolioContext = createContext<PortfolioContextType | undefined>(undefined);
 
+// ─── Safe localStorage helpers ───
+function loadFromStorage<T>(key: string, fallback: T): T {
+    if (typeof window === 'undefined') return fallback;
+    try {
+        const raw = localStorage.getItem(key);
+        return raw ? JSON.parse(raw) : fallback;
+    } catch {
+        return fallback;
+    }
+}
+
+function saveToStorage(key: string, value: unknown) {
+    if (typeof window === 'undefined') return;
+    try {
+        localStorage.setItem(key, JSON.stringify(value));
+    } catch { /* quota exceeded — fail silently */ }
+}
+
+// ─── Provider ───
 export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+    const [mounted, setMounted] = useState(false);
     const [assets, setAssets] = useState<Asset[]>(PORTFOLIO_DATA.assets);
     const [pendingOrders, setPendingOrders] = useState<Order[]>(PORTFOLIO_DATA.pendingOrders);
     const [recycledToSui, setRecycledToSui] = useState(PORTFOLIO_DATA.recycledToSui || 0);
-    const [marketTrends, setMarketTrends] = useState(PORTFOLIO_DATA.marketTrends);
+    const [marketTrends] = useState(PORTFOLIO_DATA.marketTrends);
+    const [journal, setJournal] = useState<JournalEntry[]>([]);
+
+    // Hydration: load from localStorage ONCE on mount
+    useEffect(() => {
+        setAssets(loadFromStorage(STORAGE_KEYS.assets, PORTFOLIO_DATA.assets));
+        setPendingOrders(loadFromStorage(STORAGE_KEYS.orders, PORTFOLIO_DATA.pendingOrders));
+        setRecycledToSui(loadFromStorage(STORAGE_KEYS.recycled, PORTFOLIO_DATA.recycledToSui || 0));
+        setJournal(loadFromStorage(STORAGE_KEYS.journal, []));
+        setMounted(true);
+    }, []);
+
+    // Persist on state changes (skip initial render before hydration)
+    const hasHydrated = useRef(false);
+    useEffect(() => {
+        if (!mounted) return;
+        if (!hasHydrated.current) { hasHydrated.current = true; return; }
+        saveToStorage(STORAGE_KEYS.assets, assets);
+    }, [assets, mounted]);
+
+    useEffect(() => {
+        if (!mounted) return;
+        if (!hasHydrated.current) return;
+        saveToStorage(STORAGE_KEYS.orders, pendingOrders);
+    }, [pendingOrders, mounted]);
+
+    useEffect(() => {
+        if (!mounted) return;
+        if (!hasHydrated.current) return;
+        saveToStorage(STORAGE_KEYS.recycled, recycledToSui);
+    }, [recycledToSui, mounted]);
+
+    useEffect(() => {
+        if (!mounted) return;
+        if (!hasHydrated.current) return;
+        saveToStorage(STORAGE_KEYS.journal, journal);
+    }, [journal, mounted]);
 
     // Dynamic Derived Values
     const cashBalance = assets.find(a => a.symbol === 'USD')?.currentValue || 0;
@@ -45,14 +127,15 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
                         gainLoss: newValue - (asset.totalCost || 0),
                     };
                 });
-                // Recompute allocations from the fresh total
                 const freshTotal = updated.reduce((s, a) => s + a.currentValue, 0);
                 return updated.map(a => ({ ...a, allocation: (a.currentValue / freshTotal) * 100 }));
             });
         }, 5000);
 
         return () => clearInterval(interval);
-    }, []); // stable — no external deps
+    }, []);
+
+    // ─── Actions ───
 
     const recyclePnL = useCallback((symbol: string) => {
         setAssets(prev => {
@@ -62,12 +145,10 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
             const asset = prev[assetIndex];
             const profit = Math.max(0, asset.gainLoss || 0);
-
             if (profit <= 0) return prev;
 
             const newAssets = [...prev];
 
-            // Extract profit from Alt
             newAssets[assetIndex] = {
                 ...asset,
                 units: asset.units - (profit / asset.currentPrice),
@@ -76,7 +157,6 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
                 totalCost: asset.totalCost || 0
             };
 
-            // Inject into SUI
             const sui = newAssets[suiIndex];
             newAssets[suiIndex] = {
                 ...sui,
@@ -95,11 +175,9 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }, []);
 
     const fillOrder = useCallback((id: string) => {
-        // Read the order before mutating state to avoid nesting setters
         const order = pendingOrders.find(o => o.id === id);
         if (!order) return;
 
-        // 1. Update assets
         setAssets(currentAssets => {
             const assetIndex = currentAssets.findIndex(a => a.symbol === order.symbol);
             const cost = order.units * order.price;
@@ -118,9 +196,42 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
             return currentAssets;
         });
 
-        // 2. Remove the order separately
         setPendingOrders(prev => prev.filter(o => o.id !== id));
     }, [pendingOrders]);
+
+    const addJournalEntry = useCallback((entry: Omit<JournalEntry, 'id' | 'timestamp'>) => {
+        const newEntry: JournalEntry = {
+            ...entry,
+            id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+            timestamp: new Date().toISOString(),
+        };
+        setJournal(prev => [newEntry, ...prev]);
+    }, []);
+
+    const resetToDefaults = useCallback(() => {
+        setAssets(PORTFOLIO_DATA.assets);
+        setPendingOrders(PORTFOLIO_DATA.pendingOrders);
+        setRecycledToSui(PORTFOLIO_DATA.recycledToSui || 0);
+        setJournal([]);
+        Object.values(STORAGE_KEYS).forEach(key => localStorage.removeItem(key));
+    }, []);
+
+    const exportData = useCallback(() => {
+        return JSON.stringify({ assets, pendingOrders, recycledToSui, journal }, null, 2);
+    }, [assets, pendingOrders, recycledToSui, journal]);
+
+    const importData = useCallback((json: string): boolean => {
+        try {
+            const data = JSON.parse(json);
+            if (data.assets) setAssets(data.assets);
+            if (data.pendingOrders) setPendingOrders(data.pendingOrders);
+            if (data.recycledToSui !== undefined) setRecycledToSui(data.recycledToSui);
+            if (data.journal) setJournal(data.journal);
+            return true;
+        } catch {
+            return false;
+        }
+    }, []);
 
     return (
         <PortfolioContext.Provider value={{
@@ -130,9 +241,15 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
             pendingOrders,
             recycledToSui,
             marketTrends,
+            journal,
+            mounted,
             recyclePnL,
             fillOrder,
-            killOrder
+            killOrder,
+            addJournalEntry,
+            resetToDefaults,
+            exportData,
+            importData
         }}>
             {children}
         </PortfolioContext.Provider>
