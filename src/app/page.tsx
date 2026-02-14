@@ -3,7 +3,6 @@ import React from 'react';
 import AssetTable from '@/components/AssetTable';
 import DetailedMetrics from '@/components/DetailedMetrics';
 import AIAnalyst from '@/components/AIAnalyst';
-import PendingOrders from '@/components/PendingOrders';
 import AllocationChart from '@/components/AllocationChart';
 import PriceTicker from '@/components/PriceTicker';
 import PortfolioHealth from '@/components/PortfolioHealth';
@@ -74,27 +73,19 @@ export default function Home() {
           <PortfolioHealth />
         </section>
 
-        {/* Allocation Monitor Tier */}
-        <section className="glass-card p-6 min-h-[360px] animate-fade-in-up delay-100">
-          <AllocationChart />
-        </section>
-
-        {/* Strategy Hub & Order Command */}
-        <section className="grid grid-cols-1 lg:grid-cols-12 gap-6 min-h-[450px]">
-          {/* AI Strategy Node */}
+        {/* AI Analyst + Allocation Monitor */}
+        <section className="grid grid-cols-1 lg:grid-cols-12 gap-6 min-h-[420px] animate-fade-in-up delay-100">
           <div className="glass-card lg:col-span-4 p-0 overflow-hidden flex flex-col h-full border-l-4 border-l-blue-500/50">
             <div className="h-full bg-gradient-to-b from-blue-900/5 to-transparent">
               <AIAnalyst />
             </div>
           </div>
-
-          {/* Pending Strategy Logs */}
-          <div className="glass-card lg:col-span-8 p-0 h-full overflow-hidden">
-            <PendingOrders />
+          <div className="glass-card lg:col-span-8 p-6 overflow-hidden">
+            <AllocationChart />
           </div>
         </section>
 
-        {/* Global Positions Ledger */}
+        {/* Global Positions Ledger — orders built into expandable rows */}
         <section className="glass-card p-0 overflow-hidden min-h-[500px] animate-fade-in-up delay-150">
           <AssetTable />
         </section>
