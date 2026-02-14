@@ -14,6 +14,11 @@ const Sidebar = () => {
     const suiAsset = assets.find(a => a.symbol === 'SUI');
     const totalValue = assets.reduce((s, a) => s + a.currentValue, 0);
 
+    // Combined AUM: live data for active account + seed data for other
+    const otherAccountId: AccountId = activeAccount === 'sui' ? 'alts' : 'sui';
+    const otherAccountValue = ACCOUNTS[otherAccountId].assets.reduce((s, a) => s + a.currentValue, 0);
+    const combinedAUM = totalValue + otherAccountValue;
+
     // For Strategy Pulse — show anchor weight (SUI account) or cash weight (Alts account)
     const pulsePercent = activeAccount === 'sui'
         ? (suiAsset?.allocation || 0)
@@ -70,8 +75,8 @@ const Sidebar = () => {
                                 key={id}
                                 onClick={() => { switchAccount(id); setIsOpen(false); }}
                                 className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl transition-all text-left ${isActive
-                                        ? 'bg-blue-500/10 border border-blue-500/30 shadow-[0_0_10px_rgba(59,130,246,0.15)]'
-                                        : 'bg-white/[0.02] border border-white/5 hover:bg-white/[0.05] hover:border-white/10'
+                                    ? 'bg-blue-500/10 border border-blue-500/30 shadow-[0_0_10px_rgba(59,130,246,0.15)]'
+                                    : 'bg-white/[0.02] border border-white/5 hover:bg-white/[0.05] hover:border-white/10'
                                     }`}
                             >
                                 <div className="flex items-center gap-2.5">
@@ -92,6 +97,19 @@ const Sidebar = () => {
                             </button>
                         );
                     })}
+                </div>
+
+                {/* Combined AUM */}
+                <div className="px-4 pb-3">
+                    <div className="p-3 rounded-xl bg-white/[0.02] border border-white/5">
+                        <span className="text-[9px] text-gray-600 font-black uppercase tracking-[0.2em]">Combined AUM</span>
+                        <div className="text-lg font-black font-mono text-white mt-0.5">{currency.format(combinedAUM)}</div>
+                        <div className="flex items-center gap-3 mt-1">
+                            <span className="text-[9px] text-gray-500 font-mono">SUI: {currency.format(activeAccount === 'sui' ? totalValue : otherAccountValue)}</span>
+                            <span className="text-[9px] text-gray-600">•</span>
+                            <span className="text-[9px] text-gray-500 font-mono">Alts: {currency.format(activeAccount === 'alts' ? totalValue : otherAccountValue)}</span>
+                        </div>
+                    </div>
                 </div>
 
                 {/* Nav */}
