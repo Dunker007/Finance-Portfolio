@@ -3,7 +3,7 @@ import React, { useState, useMemo } from 'react';
 import { usePortfolio } from '@/context/PortfolioContext';
 import { ACCOUNTS, AccountId, LOGO_MAPPING } from '@/data/portfolio';
 import { TRADE_FEE_PERCENT } from '@/data/strategy';
-import Sidebar from '@/components/Sidebar';
+
 
 const currency = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
 
@@ -91,369 +91,366 @@ export default function OrderBuilderPage() {
 
     return (
         <>
-            <Sidebar />
-            <div className="flex-1 flex flex-col bg-[#050505] min-h-screen overflow-hidden ml-0 lg:ml-72">
-                {/* Header */}
-                <header className="h-14 border-b border-white/5 bg-black/40 backdrop-blur-xl flex items-center justify-between px-6 z-30 sticky top-0">
-                    <div className="flex items-center gap-3">
-                        <span className="text-lg">🛒</span>
-                        <h1 className="text-sm font-black text-white uppercase tracking-widest">Order Builder</h1>
-                        <span className="text-[9px] text-gray-500 font-mono bg-white/5 px-2 py-0.5 rounded border border-white/10">
-                            {activeStrategy.name.split('—')[0].trim()} • {TRADE_FEE_PERCENT}% per trade
-                        </span>
-                    </div>
-                    <div className="flex items-center gap-4">
-                        <span className="text-[10px] text-gray-500 font-mono">{pendingOrders.length} active orders</span>
-                    </div>
-                </header>
+            {/* Header */}
+            <header className="h-14 border-b border-white/5 bg-black/40 backdrop-blur-xl flex items-center justify-between px-6 z-30 sticky top-0">
+                <div className="flex items-center gap-3">
+                    <span className="text-lg">🛒</span>
+                    <h1 className="text-sm font-black text-white uppercase tracking-widest">Order Builder</h1>
+                    <span className="text-[9px] text-gray-500 font-mono bg-white/5 px-2 py-0.5 rounded border border-white/10">
+                        {activeStrategy.name.split('—')[0].trim()} • {TRADE_FEE_PERCENT}% per trade
+                    </span>
+                </div>
+                <div className="flex items-center gap-4">
+                    <span className="text-[10px] text-gray-500 font-mono">{pendingOrders.length} active orders</span>
+                </div>
+            </header>
 
-                <main className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar">
-                    {/* Mode toggle */}
-                    <div className="flex items-center gap-3">
-                        <button
-                            onClick={() => setLadderMode(false)}
-                            className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all border ${!ladderMode ? 'bg-blue-500 text-white border-blue-500' : 'bg-white/5 text-gray-500 border-white/10 hover:bg-white/10'
-                                }`}
-                        >
-                            Single Order
-                        </button>
-                        <button
-                            onClick={() => setLadderMode(true)}
-                            className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all border ${ladderMode ? 'bg-blue-500 text-white border-blue-500' : 'bg-white/5 text-gray-500 border-white/10 hover:bg-white/10'
-                                }`}
-                        >
-                            Ladder Builder
-                        </button>
-                    </div>
+            <main className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar">
+                {/* Mode toggle */}
+                <div className="flex items-center gap-3">
+                    <button
+                        onClick={() => setLadderMode(false)}
+                        className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all border ${!ladderMode ? 'bg-blue-500 text-white border-blue-500' : 'bg-white/5 text-gray-500 border-white/10 hover:bg-white/10'
+                            }`}
+                    >
+                        Single Order
+                    </button>
+                    <button
+                        onClick={() => setLadderMode(true)}
+                        className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all border ${ladderMode ? 'bg-blue-500 text-white border-blue-500' : 'bg-white/5 text-gray-500 border-white/10 hover:bg-white/10'
+                            }`}
+                    >
+                        Ladder Builder
+                    </button>
+                </div>
 
-                    {!ladderMode ? (
-                        /* ═══ SINGLE ORDER ═══ */
-                        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                            <div className="lg:col-span-7 glass-card p-6 space-y-5">
-                                <h3 className="text-xs font-black text-gray-400 uppercase tracking-[0.2em]">New Limit Order</h3>
+                {!ladderMode ? (
+                    /* ═══ SINGLE ORDER ═══ */
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                        <div className="lg:col-span-7 glass-card p-6 space-y-5">
+                            <h3 className="text-xs font-black text-gray-400 uppercase tracking-[0.2em]">New Limit Order</h3>
 
-                                {/* Buy / Sell toggle */}
-                                <div className="flex gap-2">
-                                    <button
-                                        onClick={() => setOrderType('buy')}
-                                        className={`flex-1 py-2.5 rounded-xl text-sm font-black uppercase tracking-widest transition-all border ${orderType === 'buy'
-                                                ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30 shadow-[0_0_15px_rgba(16,185,129,0.15)]'
-                                                : 'bg-white/5 text-gray-500 border-white/10 hover:bg-white/10'
-                                            }`}
-                                    >
-                                        Buy
-                                    </button>
-                                    <button
-                                        onClick={() => setOrderType('sell')}
-                                        className={`flex-1 py-2.5 rounded-xl text-sm font-black uppercase tracking-widest transition-all border ${orderType === 'sell'
-                                                ? 'bg-rose-500/20 text-rose-400 border-rose-500/30 shadow-[0_0_15px_rgba(244,63,94,0.15)]'
-                                                : 'bg-white/5 text-gray-500 border-white/10 hover:bg-white/10'
-                                            }`}
-                                    >
-                                        Sell
-                                    </button>
-                                </div>
-
-                                {/* Symbol */}
-                                <div className="space-y-1">
-                                    <label className="text-[9px] text-gray-600 font-black uppercase tracking-widest">Asset</label>
-                                    <select
-                                        value={symbol}
-                                        onChange={e => setSymbol(e.target.value)}
-                                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white font-mono outline-none focus:border-blue-500/50"
-                                    >
-                                        <option value="" className="bg-black">Select asset...</option>
-                                        {symbols.map(s => <option key={s} value={s} className="bg-black">{s}</option>)}
-                                    </select>
-                                </div>
-
-                                {/* Units + Price row */}
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="space-y-1">
-                                        <label className="text-[9px] text-gray-600 font-black uppercase tracking-widest">Units</label>
-                                        <input
-                                            type="number" value={units} onChange={e => setUnits(e.target.value)}
-                                            placeholder="0"
-                                            className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white font-mono outline-none focus:border-blue-500/50"
-                                        />
-                                    </div>
-                                    <div className="space-y-1">
-                                        <label className="text-[9px] text-gray-600 font-black uppercase tracking-widest">Limit Price ($)</label>
-                                        <input
-                                            type="number" value={price} onChange={e => setPrice(e.target.value)}
-                                            placeholder="0.00"
-                                            step="0.01"
-                                            className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white font-mono outline-none focus:border-blue-500/50"
-                                        />
-                                    </div>
-                                </div>
-
-                                {/* Current price hint */}
-                                {symbol && (
-                                    <div className="text-[9px] text-gray-600 font-mono">
-                                        Current spot: {currency.format(assets.find(a => a.symbol === symbol)?.currentPrice || 0)}
-                                        {' • '}
-                                        <button onClick={() => setPrice(String(assets.find(a => a.symbol === symbol)?.currentPrice || 0))} className="text-blue-400 hover:text-blue-300 underline">
-                                            Use spot
-                                        </button>
-                                    </div>
-                                )}
-
-                                {/* Note */}
-                                <div className="space-y-1">
-                                    <label className="text-[9px] text-gray-600 font-black uppercase tracking-widest">Note (optional)</label>
-                                    <input
-                                        type="text" value={note} onChange={e => setNote(e.target.value)}
-                                        placeholder="Thesis or trigger..."
-                                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-gray-700 outline-none focus:border-blue-500/50"
-                                    />
-                                </div>
-
-                                {/* Submit */}
+                            {/* Buy / Sell toggle */}
+                            <div className="flex gap-2">
                                 <button
-                                    onClick={handleSubmitOrder}
-                                    disabled={!symbol || !previewUnits || !previewPrice}
-                                    className={`w-full py-3 rounded-xl text-sm font-black uppercase tracking-widest transition-all border ${symbol && previewUnits && previewPrice
-                                            ? orderType === 'buy'
-                                                ? 'bg-emerald-600 hover:bg-emerald-500 text-white border-emerald-500'
-                                                : 'bg-rose-600 hover:bg-rose-500 text-white border-rose-500'
-                                            : 'bg-white/5 text-gray-600 border-white/10 cursor-not-allowed'
+                                    onClick={() => setOrderType('buy')}
+                                    className={`flex-1 py-2.5 rounded-xl text-sm font-black uppercase tracking-widest transition-all border ${orderType === 'buy'
+                                        ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30 shadow-[0_0_15px_rgba(16,185,129,0.15)]'
+                                        : 'bg-white/5 text-gray-500 border-white/10 hover:bg-white/10'
                                         }`}
                                 >
-                                    Stage {orderType === 'buy' ? 'Buy' : 'Sell'} Order
+                                    Buy
+                                </button>
+                                <button
+                                    onClick={() => setOrderType('sell')}
+                                    className={`flex-1 py-2.5 rounded-xl text-sm font-black uppercase tracking-widest transition-all border ${orderType === 'sell'
+                                        ? 'bg-rose-500/20 text-rose-400 border-rose-500/30 shadow-[0_0_15px_rgba(244,63,94,0.15)]'
+                                        : 'bg-white/5 text-gray-500 border-white/10 hover:bg-white/10'
+                                        }`}
+                                >
+                                    Sell
                                 </button>
                             </div>
 
-                            {/* Fee preview panel */}
-                            <div className="lg:col-span-5 glass-card p-6 space-y-5 h-fit">
-                                <h3 className="text-xs font-black text-gray-400 uppercase tracking-[0.2em]">Order Preview</h3>
-
-                                {previewGross > 0 ? (
-                                    <div className="space-y-4">
-                                        <div className="p-4 rounded-xl bg-white/[0.02] border border-white/5 space-y-3">
-                                            <PreviewRow label="Gross Value" value={currency.format(previewGross)} />
-                                            <PreviewRow label={`Fee (${TRADE_FEE_PERCENT}%)`} value={`-${currency.format(previewFee)}`} color="text-amber-400" />
-                                            <div className="border-t border-white/5 pt-2">
-                                                <PreviewRow
-                                                    label={orderType === 'buy' ? 'Total Cost' : 'Net Proceeds'}
-                                                    value={currency.format(previewNet)}
-                                                    color="text-white"
-                                                    bold
-                                                />
-                                            </div>
-                                        </div>
-
-                                        {/* Impact preview */}
-                                        {symbol && (
-                                            <div className="p-4 rounded-xl bg-blue-500/5 border border-blue-500/20 space-y-2">
-                                                <span className="text-[9px] text-blue-400 font-black uppercase tracking-widest">Impact Preview</span>
-                                                <PortfolioImpact symbol={symbol} orderType={orderType} gross={previewGross} fee={previewFee} assets={assets} />
-                                            </div>
-                                        )}
-                                    </div>
-                                ) : (
-                                    <div className="text-center py-12">
-                                        <p className="text-gray-600 text-xs font-mono">Fill out the form to see preview</p>
-                                    </div>
-                                )}
+                            {/* Symbol */}
+                            <div className="space-y-1">
+                                <label className="text-[9px] text-gray-600 font-black uppercase tracking-widest">Asset</label>
+                                <select
+                                    value={symbol}
+                                    onChange={e => setSymbol(e.target.value)}
+                                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white font-mono outline-none focus:border-blue-500/50"
+                                >
+                                    <option value="" className="bg-black">Select asset...</option>
+                                    {symbols.map(s => <option key={s} value={s} className="bg-black">{s}</option>)}
+                                </select>
                             </div>
+
+                            {/* Units + Price row */}
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-1">
+                                    <label className="text-[9px] text-gray-600 font-black uppercase tracking-widest">Units</label>
+                                    <input
+                                        type="number" value={units} onChange={e => setUnits(e.target.value)}
+                                        placeholder="0"
+                                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white font-mono outline-none focus:border-blue-500/50"
+                                    />
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-[9px] text-gray-600 font-black uppercase tracking-widest">Limit Price ($)</label>
+                                    <input
+                                        type="number" value={price} onChange={e => setPrice(e.target.value)}
+                                        placeholder="0.00"
+                                        step="0.01"
+                                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white font-mono outline-none focus:border-blue-500/50"
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Current price hint */}
+                            {symbol && (
+                                <div className="text-[9px] text-gray-600 font-mono">
+                                    Current spot: {currency.format(assets.find(a => a.symbol === symbol)?.currentPrice || 0)}
+                                    {' • '}
+                                    <button onClick={() => setPrice(String(assets.find(a => a.symbol === symbol)?.currentPrice || 0))} className="text-blue-400 hover:text-blue-300 underline">
+                                        Use spot
+                                    </button>
+                                </div>
+                            )}
+
+                            {/* Note */}
+                            <div className="space-y-1">
+                                <label className="text-[9px] text-gray-600 font-black uppercase tracking-widest">Note (optional)</label>
+                                <input
+                                    type="text" value={note} onChange={e => setNote(e.target.value)}
+                                    placeholder="Thesis or trigger..."
+                                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-gray-700 outline-none focus:border-blue-500/50"
+                                />
+                            </div>
+
+                            {/* Submit */}
+                            <button
+                                onClick={handleSubmitOrder}
+                                disabled={!symbol || !previewUnits || !previewPrice}
+                                className={`w-full py-3 rounded-xl text-sm font-black uppercase tracking-widest transition-all border ${symbol && previewUnits && previewPrice
+                                    ? orderType === 'buy'
+                                        ? 'bg-emerald-600 hover:bg-emerald-500 text-white border-emerald-500'
+                                        : 'bg-rose-600 hover:bg-rose-500 text-white border-rose-500'
+                                    : 'bg-white/5 text-gray-600 border-white/10 cursor-not-allowed'
+                                    }`}
+                            >
+                                Stage {orderType === 'buy' ? 'Buy' : 'Sell'} Order
+                            </button>
+                        </div>
+
+                        {/* Fee preview panel */}
+                        <div className="lg:col-span-5 glass-card p-6 space-y-5 h-fit">
+                            <h3 className="text-xs font-black text-gray-400 uppercase tracking-[0.2em]">Order Preview</h3>
+
+                            {previewGross > 0 ? (
+                                <div className="space-y-4">
+                                    <div className="p-4 rounded-xl bg-white/[0.02] border border-white/5 space-y-3">
+                                        <PreviewRow label="Gross Value" value={currency.format(previewGross)} />
+                                        <PreviewRow label={`Fee (${TRADE_FEE_PERCENT}%)`} value={`-${currency.format(previewFee)}`} color="text-amber-400" />
+                                        <div className="border-t border-white/5 pt-2">
+                                            <PreviewRow
+                                                label={orderType === 'buy' ? 'Total Cost' : 'Net Proceeds'}
+                                                value={currency.format(previewNet)}
+                                                color="text-white"
+                                                bold
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {/* Impact preview */}
+                                    {symbol && (
+                                        <div className="p-4 rounded-xl bg-blue-500/5 border border-blue-500/20 space-y-2">
+                                            <span className="text-[9px] text-blue-400 font-black uppercase tracking-widest">Impact Preview</span>
+                                            <PortfolioImpact symbol={symbol} orderType={orderType} gross={previewGross} fee={previewFee} assets={assets} />
+                                        </div>
+                                    )}
+                                </div>
+                            ) : (
+                                <div className="text-center py-12">
+                                    <p className="text-gray-600 text-xs font-mono">Fill out the form to see preview</p>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                ) : (
+                    /* ═══ LADDER BUILDER ═══ */
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                        <div className="lg:col-span-5 glass-card p-6 space-y-5">
+                            <h3 className="text-xs font-black text-gray-400 uppercase tracking-[0.2em]">Ladder Configuration</h3>
+
+                            <div className="flex gap-2">
+                                <button onClick={() => setLadderType('sell')}
+                                    className={`flex-1 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all border ${ladderType === 'sell' ? 'bg-rose-500/20 text-rose-400 border-rose-500/30' : 'bg-white/5 text-gray-500 border-white/10'}`}
+                                >Sell Ladder</button>
+                                <button onClick={() => setLadderType('buy')}
+                                    className={`flex-1 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all border ${ladderType === 'buy' ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-white/5 text-gray-500 border-white/10'}`}
+                                >Buy Ladder</button>
+                            </div>
+
+                            <div className="space-y-1">
+                                <label className="text-[9px] text-gray-600 font-black uppercase tracking-widest">Asset</label>
+                                <select value={ladderSymbol} onChange={e => setLadderSymbol(e.target.value)}
+                                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white font-mono outline-none focus:border-blue-500/50"
+                                >
+                                    <option value="" className="bg-black">Select...</option>
+                                    {symbols.map(s => <option key={s} value={s} className="bg-black">{s}</option>)}
+                                </select>
+                            </div>
+
+                            <div className="space-y-1">
+                                <label className="text-[9px] text-gray-600 font-black uppercase tracking-widest">Units per rung</label>
+                                <input type="number" value={ladderUnitsEach} onChange={e => setLadderUnitsEach(e.target.value)}
+                                    placeholder="100"
+                                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white font-mono outline-none focus:border-blue-500/50"
+                                />
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-1">
+                                    <label className="text-[9px] text-gray-600 font-black uppercase tracking-widest">Start Price ($)</label>
+                                    <input type="number" value={ladderPriceStart} onChange={e => setLadderPriceStart(e.target.value)}
+                                        placeholder="4.00" step="0.01"
+                                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white font-mono outline-none focus:border-blue-500/50"
+                                    />
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-[9px] text-gray-600 font-black uppercase tracking-widest">End Price ($)</label>
+                                    <input type="number" value={ladderPriceEnd} onChange={e => setLadderPriceEnd(e.target.value)}
+                                        placeholder="7.00" step="0.01"
+                                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white font-mono outline-none focus:border-blue-500/50"
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="space-y-1">
+                                <label className="text-[9px] text-gray-600 font-black uppercase tracking-widest">Rungs (steps)</label>
+                                <input type="number" value={ladderSteps} onChange={e => setLadderSteps(e.target.value)}
+                                    min="2" max="10"
+                                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white font-mono outline-none focus:border-blue-500/50"
+                                />
+                            </div>
+
+                            <div className="space-y-1">
+                                <label className="text-[9px] text-gray-600 font-black uppercase tracking-widest">Note</label>
+                                <input type="text" value={ladderNote} onChange={e => setLadderNote(e.target.value)}
+                                    placeholder="Ladder exit strategy..."
+                                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-gray-700 outline-none focus:border-blue-500/50"
+                                />
+                            </div>
+
+                            <button onClick={handleSubmitLadder} disabled={!ladderSymbol || ladderPreview.length === 0}
+                                className={`w-full py-3 rounded-xl text-sm font-black uppercase tracking-widest transition-all border ${ladderSymbol && ladderPreview.length > 0
+                                    ? 'bg-blue-600 hover:bg-blue-500 text-white border-blue-500'
+                                    : 'bg-white/5 text-gray-600 border-white/10 cursor-not-allowed'
+                                    }`}
+                            >
+                                Stage {ladderPreview.length} Orders
+                            </button>
+                        </div>
+
+                        {/* Ladder preview */}
+                        <div className="lg:col-span-7 glass-card p-6 space-y-4">
+                            <h3 className="text-xs font-black text-gray-400 uppercase tracking-[0.2em]">Ladder Preview</h3>
+                            {ladderPreview.length > 0 ? (
+                                <>
+                                    <div className="space-y-2">
+                                        {ladderPreview.map((step, i) => (
+                                            <div key={i} className="flex items-center justify-between p-3 rounded-xl bg-white/[0.02] border border-white/5">
+                                                <div className="flex items-center gap-3">
+                                                    <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-[9px] font-black ${ladderType === 'sell' ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'}`}>
+                                                        {i + 1}
+                                                    </div>
+                                                    <div className="flex flex-col">
+                                                        <span className="text-xs font-mono font-bold text-white">{step.units} units @ {currency.format(step.price)}</span>
+                                                        <span className="text-[9px] text-gray-600 font-mono">Gross: {currency.format(step.gross)} • Fee: {currency.format(step.fee)}</span>
+                                                    </div>
+                                                </div>
+                                                <span className="text-sm font-black font-mono text-white">{currency.format(step.net)}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <div className="p-4 rounded-xl bg-blue-500/5 border border-blue-500/20 space-y-2">
+                                        <PreviewRow label="Total Gross" value={currency.format(ladderPreview.reduce((s, r) => s + r.gross, 0))} />
+                                        <PreviewRow label="Total Fees" value={`-${currency.format(ladderPreview.reduce((s, r) => s + r.fee, 0))}`} color="text-amber-400" />
+                                        <div className="border-t border-white/5 pt-2">
+                                            <PreviewRow label="Total Net" value={currency.format(ladderPreview.reduce((s, r) => s + r.net, 0))} color="text-white" bold />
+                                        </div>
+                                    </div>
+                                </>
+                            ) : (
+                                <div className="text-center py-16">
+                                    <p className="text-gray-600 text-xs font-mono">Configure ladder to see preview</p>
+                                    <p className="text-gray-700 text-[10px] font-mono mt-2">Set asset, units, price range, and steps</p>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
+
+                {/* ═══ CROSS-ACCOUNT ORDER BOOK ═══ */}
+                <div className="glass-card p-6 space-y-4">
+                    <div className="flex items-center justify-between">
+                        <h3 className="text-xs font-black text-gray-400 uppercase tracking-[0.2em]">All Staged Orders</h3>
+                        <span className="text-[9px] text-gray-600 font-mono">{allOrders.length} orders across {new Set(allOrders.map(o => o.account)).size} account(s)</span>
+                    </div>
+
+                    {allOrders.length === 0 ? (
+                        <div className="text-center py-12">
+                            <p className="text-gray-600 text-xs font-mono">No staged orders yet</p>
                         </div>
                     ) : (
-                        /* ═══ LADDER BUILDER ═══ */
-                        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                            <div className="lg:col-span-5 glass-card p-6 space-y-5">
-                                <h3 className="text-xs font-black text-gray-400 uppercase tracking-[0.2em]">Ladder Configuration</h3>
-
-                                <div className="flex gap-2">
-                                    <button onClick={() => setLadderType('sell')}
-                                        className={`flex-1 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all border ${ladderType === 'sell' ? 'bg-rose-500/20 text-rose-400 border-rose-500/30' : 'bg-white/5 text-gray-500 border-white/10'}`}
-                                    >Sell Ladder</button>
-                                    <button onClick={() => setLadderType('buy')}
-                                        className={`flex-1 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all border ${ladderType === 'buy' ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-white/5 text-gray-500 border-white/10'}`}
-                                    >Buy Ladder</button>
-                                </div>
-
-                                <div className="space-y-1">
-                                    <label className="text-[9px] text-gray-600 font-black uppercase tracking-widest">Asset</label>
-                                    <select value={ladderSymbol} onChange={e => setLadderSymbol(e.target.value)}
-                                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white font-mono outline-none focus:border-blue-500/50"
-                                    >
-                                        <option value="" className="bg-black">Select...</option>
-                                        {symbols.map(s => <option key={s} value={s} className="bg-black">{s}</option>)}
-                                    </select>
-                                </div>
-
-                                <div className="space-y-1">
-                                    <label className="text-[9px] text-gray-600 font-black uppercase tracking-widest">Units per rung</label>
-                                    <input type="number" value={ladderUnitsEach} onChange={e => setLadderUnitsEach(e.target.value)}
-                                        placeholder="100"
-                                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white font-mono outline-none focus:border-blue-500/50"
-                                    />
-                                </div>
-
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="space-y-1">
-                                        <label className="text-[9px] text-gray-600 font-black uppercase tracking-widest">Start Price ($)</label>
-                                        <input type="number" value={ladderPriceStart} onChange={e => setLadderPriceStart(e.target.value)}
-                                            placeholder="4.00" step="0.01"
-                                            className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white font-mono outline-none focus:border-blue-500/50"
-                                        />
-                                    </div>
-                                    <div className="space-y-1">
-                                        <label className="text-[9px] text-gray-600 font-black uppercase tracking-widest">End Price ($)</label>
-                                        <input type="number" value={ladderPriceEnd} onChange={e => setLadderPriceEnd(e.target.value)}
-                                            placeholder="7.00" step="0.01"
-                                            className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white font-mono outline-none focus:border-blue-500/50"
-                                        />
-                                    </div>
-                                </div>
-
-                                <div className="space-y-1">
-                                    <label className="text-[9px] text-gray-600 font-black uppercase tracking-widest">Rungs (steps)</label>
-                                    <input type="number" value={ladderSteps} onChange={e => setLadderSteps(e.target.value)}
-                                        min="2" max="10"
-                                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white font-mono outline-none focus:border-blue-500/50"
-                                    />
-                                </div>
-
-                                <div className="space-y-1">
-                                    <label className="text-[9px] text-gray-600 font-black uppercase tracking-widest">Note</label>
-                                    <input type="text" value={ladderNote} onChange={e => setLadderNote(e.target.value)}
-                                        placeholder="Ladder exit strategy..."
-                                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-gray-700 outline-none focus:border-blue-500/50"
-                                    />
-                                </div>
-
-                                <button onClick={handleSubmitLadder} disabled={!ladderSymbol || ladderPreview.length === 0}
-                                    className={`w-full py-3 rounded-xl text-sm font-black uppercase tracking-widest transition-all border ${ladderSymbol && ladderPreview.length > 0
-                                            ? 'bg-blue-600 hover:bg-blue-500 text-white border-blue-500'
-                                            : 'bg-white/5 text-gray-600 border-white/10 cursor-not-allowed'
-                                        }`}
-                                >
-                                    Stage {ladderPreview.length} Orders
-                                </button>
-                            </div>
-
-                            {/* Ladder preview */}
-                            <div className="lg:col-span-7 glass-card p-6 space-y-4">
-                                <h3 className="text-xs font-black text-gray-400 uppercase tracking-[0.2em]">Ladder Preview</h3>
-                                {ladderPreview.length > 0 ? (
-                                    <>
-                                        <div className="space-y-2">
-                                            {ladderPreview.map((step, i) => (
-                                                <div key={i} className="flex items-center justify-between p-3 rounded-xl bg-white/[0.02] border border-white/5">
-                                                    <div className="flex items-center gap-3">
-                                                        <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-[9px] font-black ${ladderType === 'sell' ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'}`}>
-                                                            {i + 1}
-                                                        </div>
-                                                        <div className="flex flex-col">
-                                                            <span className="text-xs font-mono font-bold text-white">{step.units} units @ {currency.format(step.price)}</span>
-                                                            <span className="text-[9px] text-gray-600 font-mono">Gross: {currency.format(step.gross)} • Fee: {currency.format(step.fee)}</span>
-                                                        </div>
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left border-collapse">
+                                <thead>
+                                    <tr className="border-b border-white/5">
+                                        <th className="p-3 text-[9px] font-bold text-gray-500 uppercase tracking-widest">Account</th>
+                                        <th className="p-3 text-[9px] font-bold text-gray-500 uppercase tracking-widest">Type</th>
+                                        <th className="p-3 text-[9px] font-bold text-gray-500 uppercase tracking-widest">Asset</th>
+                                        <th className="p-3 text-[9px] font-bold text-gray-500 uppercase tracking-widest text-right">Units</th>
+                                        <th className="p-3 text-[9px] font-bold text-gray-500 uppercase tracking-widest text-right">Price</th>
+                                        <th className="p-3 text-[9px] font-bold text-gray-500 uppercase tracking-widest text-right">Value</th>
+                                        <th className="p-3 text-[9px] font-bold text-gray-500 uppercase tracking-widest text-right">Fee</th>
+                                        <th className="p-3 text-[9px] font-bold text-gray-500 uppercase tracking-widest">Note</th>
+                                        <th className="p-3 text-[9px] font-bold text-gray-500 uppercase tracking-widest text-right">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-white/5">
+                                    {allOrders.map(order => {
+                                        const gross = order.units * order.price;
+                                        const fee = gross * (TRADE_FEE_PERCENT / 100);
+                                        const isActive = order.account === activeAccount;
+                                        return (
+                                            <tr key={order.id} className={`hover:bg-white/[0.03] transition-all ${!isActive ? 'opacity-50' : ''}`}>
+                                                <td className="p-3 text-[10px] font-mono text-gray-400">{order.account === 'sui' ? '👑 SUI' : '🔄 ALTS'}</td>
+                                                <td className="p-3">
+                                                    <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded border ${order.type === 'buy' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border-rose-500/20'}`}>
+                                                        {order.type}
+                                                    </span>
+                                                </td>
+                                                <td className="p-3">
+                                                    <div className="flex items-center gap-2">
+                                                        {LOGO_MAPPING[order.symbol] && (
+                                                            <img src={LOGO_MAPPING[order.symbol]} alt={order.symbol} className="w-4 h-4" />
+                                                        )}
+                                                        <span className="text-xs font-black text-white">{order.symbol}</span>
                                                     </div>
-                                                    <span className="text-sm font-black font-mono text-white">{currency.format(step.net)}</span>
-                                                </div>
-                                            ))}
-                                        </div>
-                                        <div className="p-4 rounded-xl bg-blue-500/5 border border-blue-500/20 space-y-2">
-                                            <PreviewRow label="Total Gross" value={currency.format(ladderPreview.reduce((s, r) => s + r.gross, 0))} />
-                                            <PreviewRow label="Total Fees" value={`-${currency.format(ladderPreview.reduce((s, r) => s + r.fee, 0))}`} color="text-amber-400" />
-                                            <div className="border-t border-white/5 pt-2">
-                                                <PreviewRow label="Total Net" value={currency.format(ladderPreview.reduce((s, r) => s + r.net, 0))} color="text-white" bold />
-                                            </div>
-                                        </div>
-                                    </>
-                                ) : (
-                                    <div className="text-center py-16">
-                                        <p className="text-gray-600 text-xs font-mono">Configure ladder to see preview</p>
-                                        <p className="text-gray-700 text-[10px] font-mono mt-2">Set asset, units, price range, and steps</p>
-                                    </div>
-                                )}
-                            </div>
+                                                </td>
+                                                <td className="p-3 text-right text-xs font-mono text-gray-300">{order.units.toLocaleString()}</td>
+                                                <td className="p-3 text-right text-xs font-mono text-blue-400">{currency.format(order.price)}</td>
+                                                <td className="p-3 text-right text-xs font-mono text-white">{currency.format(gross)}</td>
+                                                <td className="p-3 text-right text-xs font-mono text-amber-400">{currency.format(fee)}</td>
+                                                <td className="p-3 text-[10px] text-gray-500 max-w-[200px] truncate italic">{order.note || '—'}</td>
+                                                <td className="p-3 text-right">
+                                                    {isActive && (
+                                                        <div className="flex items-center gap-1.5 justify-end">
+                                                            <button onClick={() => fillOrder(order.id)}
+                                                                className="px-2 py-1 rounded-lg bg-blue-500/10 hover:bg-blue-500 text-blue-400 hover:text-white text-[8px] font-black uppercase transition-all border border-blue-500/20"
+                                                            >Fill</button>
+                                                            <button onClick={() => killOrder(order.id)}
+                                                                className="px-2 py-1 rounded-lg bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white text-[8px] font-black uppercase transition-all border border-red-500/20"
+                                                            >Kill</button>
+                                                        </div>
+                                                    )}
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
                         </div>
                     )}
 
-                    {/* ═══ CROSS-ACCOUNT ORDER BOOK ═══ */}
-                    <div className="glass-card p-6 space-y-4">
-                        <div className="flex items-center justify-between">
-                            <h3 className="text-xs font-black text-gray-400 uppercase tracking-[0.2em]">All Staged Orders</h3>
-                            <span className="text-[9px] text-gray-600 font-mono">{allOrders.length} orders across {new Set(allOrders.map(o => o.account)).size} account(s)</span>
-                        </div>
-
-                        {allOrders.length === 0 ? (
-                            <div className="text-center py-12">
-                                <p className="text-gray-600 text-xs font-mono">No staged orders yet</p>
-                            </div>
-                        ) : (
-                            <div className="overflow-x-auto">
-                                <table className="w-full text-left border-collapse">
-                                    <thead>
-                                        <tr className="border-b border-white/5">
-                                            <th className="p-3 text-[9px] font-bold text-gray-500 uppercase tracking-widest">Account</th>
-                                            <th className="p-3 text-[9px] font-bold text-gray-500 uppercase tracking-widest">Type</th>
-                                            <th className="p-3 text-[9px] font-bold text-gray-500 uppercase tracking-widest">Asset</th>
-                                            <th className="p-3 text-[9px] font-bold text-gray-500 uppercase tracking-widest text-right">Units</th>
-                                            <th className="p-3 text-[9px] font-bold text-gray-500 uppercase tracking-widest text-right">Price</th>
-                                            <th className="p-3 text-[9px] font-bold text-gray-500 uppercase tracking-widest text-right">Value</th>
-                                            <th className="p-3 text-[9px] font-bold text-gray-500 uppercase tracking-widest text-right">Fee</th>
-                                            <th className="p-3 text-[9px] font-bold text-gray-500 uppercase tracking-widest">Note</th>
-                                            <th className="p-3 text-[9px] font-bold text-gray-500 uppercase tracking-widest text-right">Actions</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-white/5">
-                                        {allOrders.map(order => {
-                                            const gross = order.units * order.price;
-                                            const fee = gross * (TRADE_FEE_PERCENT / 100);
-                                            const isActive = order.account === activeAccount;
-                                            return (
-                                                <tr key={order.id} className={`hover:bg-white/[0.03] transition-all ${!isActive ? 'opacity-50' : ''}`}>
-                                                    <td className="p-3 text-[10px] font-mono text-gray-400">{order.account === 'sui' ? '👑 SUI' : '🔄 ALTS'}</td>
-                                                    <td className="p-3">
-                                                        <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded border ${order.type === 'buy' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border-rose-500/20'}`}>
-                                                            {order.type}
-                                                        </span>
-                                                    </td>
-                                                    <td className="p-3">
-                                                        <div className="flex items-center gap-2">
-                                                            {LOGO_MAPPING[order.symbol] && (
-                                                                <img src={LOGO_MAPPING[order.symbol]} alt={order.symbol} className="w-4 h-4" />
-                                                            )}
-                                                            <span className="text-xs font-black text-white">{order.symbol}</span>
-                                                        </div>
-                                                    </td>
-                                                    <td className="p-3 text-right text-xs font-mono text-gray-300">{order.units.toLocaleString()}</td>
-                                                    <td className="p-3 text-right text-xs font-mono text-blue-400">{currency.format(order.price)}</td>
-                                                    <td className="p-3 text-right text-xs font-mono text-white">{currency.format(gross)}</td>
-                                                    <td className="p-3 text-right text-xs font-mono text-amber-400">{currency.format(fee)}</td>
-                                                    <td className="p-3 text-[10px] text-gray-500 max-w-[200px] truncate italic">{order.note || '—'}</td>
-                                                    <td className="p-3 text-right">
-                                                        {isActive && (
-                                                            <div className="flex items-center gap-1.5 justify-end">
-                                                                <button onClick={() => fillOrder(order.id)}
-                                                                    className="px-2 py-1 rounded-lg bg-blue-500/10 hover:bg-blue-500 text-blue-400 hover:text-white text-[8px] font-black uppercase transition-all border border-blue-500/20"
-                                                                >Fill</button>
-                                                                <button onClick={() => killOrder(order.id)}
-                                                                    className="px-2 py-1 rounded-lg bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white text-[8px] font-black uppercase transition-all border border-red-500/20"
-                                                                >Kill</button>
-                                                            </div>
-                                                        )}
-                                                    </td>
-                                                </tr>
-                                            );
-                                        })}
-                                    </tbody>
-                                </table>
-                            </div>
-                        )}
-
-                        {/* Fee summary */}
-                        <div className="flex items-center justify-between p-3 rounded-xl bg-white/[0.02] border border-white/5 text-[9px] font-mono">
-                            <span className="text-gray-500">Total staged value: <span className="text-white font-bold">{currency.format(allOrders.reduce((s, o) => s + o.units * o.price, 0))}</span></span>
-                            <span className="text-amber-400">Total fee drag: {currency.format(allOrders.reduce((s, o) => s + o.units * o.price * TRADE_FEE_PERCENT / 100, 0))}</span>
-                        </div>
+                    {/* Fee summary */}
+                    <div className="flex items-center justify-between p-3 rounded-xl bg-white/[0.02] border border-white/5 text-[9px] font-mono">
+                        <span className="text-gray-500">Total staged value: <span className="text-white font-bold">{currency.format(allOrders.reduce((s, o) => s + o.units * o.price, 0))}</span></span>
+                        <span className="text-amber-400">Total fee drag: {currency.format(allOrders.reduce((s, o) => s + o.units * o.price * TRADE_FEE_PERCENT / 100, 0))}</span>
                     </div>
-                </main>
-            </div>
+                </div>
+            </main>
         </>
     );
 }
