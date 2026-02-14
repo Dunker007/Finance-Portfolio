@@ -205,6 +205,7 @@ const Sidebar = () => {
                     <NavItem icon="🛒" label="Order Builder" href="/orders" active={pathname === '/orders'} onClick={() => setIsOpen(false)} />
                     <NavItem icon="🛡️" label="Risk Guard" href="/risk" active={pathname === '/risk'} onClick={() => setIsOpen(false)} />
                     <NavItem icon="📋" label="Portfolio Report" href="/report" active={pathname === '/report'} onClick={() => setIsOpen(false)} />
+                    <NavItem icon="⚙️" label="Settings" href="/settings" active={pathname === '/settings'} onClick={() => setIsOpen(false)} />
                 </nav>
 
                 {/* Spacer to push Nav down or Footer down? User said "below AUM". 
