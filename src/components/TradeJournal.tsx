@@ -7,7 +7,7 @@ import { TRADE_FEE_PERCENT } from '../data/strategy';
 const currency = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
 
 export default function TradeJournal() {
-    const { journal, addJournalEntry, removeJournalEntry, addOrder, exportData, importData, resetToDefaults, assets, pendingOrders } = usePortfolio();
+    const { journal, addJournalEntry, removeJournalEntry, syncAssetBalance, addOrder, exportData, importData, resetToDefaults, assets, pendingOrders } = usePortfolio();
     const SYMBOLS = assets.map(a => a.symbol);
     const [isOpen, setIsOpen] = useState(false);
     const [isImportOpen, setIsImportOpen] = useState(false);
@@ -54,17 +54,58 @@ export default function TradeJournal() {
     const parseAndProcessHistory = () => {
         if (!importText.trim()) return;
 
-        const lines = importText.split(/\n/);
+        // ─── 1. Portfolio Balance Sync ───
+        if (importText.includes('Portfolio')) {
+            let syncedCount = 0;
+            const lines = importText.split('\n').map(l => l.trim());
+
+            // USD Special Case (Cash)
+            // Pattern: "USDUSD" -> "35.30%" -> "$1,258.55"
+            const usdIdx = lines.findIndex(l => l.toUpperCase().startsWith('USDUSD'));
+            if (usdIdx !== -1 && lines[usdIdx + 2]) {
+                const valStr = lines[usdIdx + 2].replace('$', '').replace(/,/g, '');
+                const val = parseFloat(valStr);
+                if (!isNaN(val)) {
+                    syncAssetBalance('USD', val);
+                    syncedCount++;
+                }
+            }
+
+            // Other Assets
+            // Pattern: "SUISUI" -> "52.10%" -> "1,912.10"
+            assets.forEach(asset => {
+                if (asset.symbol === 'USD') return;
+                // Match "SUISUI" or just "SUI"
+                const double = (asset.symbol + asset.symbol).toUpperCase();
+                const single = asset.symbol.toUpperCase();
+
+                const idx = lines.findIndex(l => {
+                    const line = l.toUpperCase();
+                    return line.startsWith(double) || line === single;
+                });
+
+                if (idx !== -1 && lines[idx + 2]) {
+                    // Check if it's really units (number) or value ($)
+                    // Usually for crypto: Line+2 is Units, Line+3 is Value (~$1,856)
+                    const potentialUnits = lines[idx + 2].replace(/,/g, '');
+                    if (!potentialUnits.startsWith('$') && !isNaN(parseFloat(potentialUnits))) {
+                        const units = parseFloat(potentialUnits);
+                        syncAssetBalance(asset.symbol, units);
+                        syncedCount++;
+                    }
+                }
+            });
+
+            if (syncedCount > 0) {
+                // Notify usage but don't block
+                console.log(`[SmartFolio] Synced ${syncedCount} balances from paste.`);
+            }
+        }
+
+        // ─── 2. Transaction Log Import ───
+        const tokenStream = importText.split(/[\t\n]/).map(s => s.trim()).filter(s => s.length > 0);
         let processed = 0;
         let skipped = 0;
-
-        // Simple state machine or sliding window could work, but user pastes row-based data.
-        // Format examples: 
-        // "Limit Sell\n513b7d5\n1,100.00 SUI\n$1.05 Placed 2026-02-13" (multiline)
-        // "Market Buy\tddb364d\t10.086776 UNI\t$34.60 USD\t$3.43\tExecuted\t2026-02-13" (tab separated)
-
-        // We will tokenize the input and look for patterns.
-        const tokenStream = importText.split(/[\t\n]/).map(s => s.trim()).filter(s => s.length > 0);
 
         // Regex for ID (approx 7 chars hex)
         const idRegex = /^[a-f0-9]{7}$/i;

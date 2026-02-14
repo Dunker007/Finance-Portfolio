@@ -57,6 +57,7 @@ interface PortfolioContextType {
     addOrder: (order: Omit<Order, 'status' | 'id' | 'date'> & { status?: 'open' | 'filled' | 'cancelled'; date?: string; id?: string }) => void;
     addJournalEntry: (entry: Omit<JournalEntry, 'id' | 'timestamp'> & { id?: string; timestamp?: string }) => void;
     removeJournalEntry: (id: string) => void;
+    syncAssetBalance: (symbol: string, units: number) => void;
     resetToDefaults: () => void;
     exportData: () => string;
     importData: (json: string) => boolean;
@@ -332,6 +333,40 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         setJournal(prev => prev.filter(e => e.id !== id));
     }, []);
 
+    const syncAssetBalance = useCallback((symbol: string, units: number) => {
+        setAssets(prev => {
+            const target = symbol.trim().toUpperCase();
+            const idx = prev.findIndex(a => a.symbol.toUpperCase() === target);
+            if (idx === -1) {
+                console.warn(`[SmartFolio] syncAssetBalance: Symbol ${target} not found.`);
+                return prev;
+            }
+
+            const next = [...prev];
+            const asset = next[idx];
+            const safeUnits = isNaN(units) ? 0 : units;
+
+            // Proportional cost adjustment
+            let newCost = asset.totalCost || 0;
+            if (asset.units > 0) {
+                newCost = (asset.totalCost || 0) * (safeUnits / asset.units);
+            } else if (safeUnits > 0) {
+                // If starting from 0, assume cost basis = current value (0% PnL start)
+                newCost = safeUnits * asset.currentPrice;
+            }
+
+            next[idx] = {
+                ...asset,
+                units: safeUnits,
+                currentValue: safeUnits * asset.currentPrice,
+                totalCost: newCost
+            };
+
+            console.log(`[SmartFolio] Synced ${target} to ${safeUnits} units.`);
+            return next;
+        });
+    }, []);
+
     const resetToDefaults = useCallback(() => {
         const seed = ACCOUNTS[activeAccount];
         setAssets(seed.assets);
@@ -384,6 +419,7 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
             addOrder,
             addJournalEntry,
             removeJournalEntry,
+            syncAssetBalance,
             resetToDefaults,
             exportData,
             importData,
