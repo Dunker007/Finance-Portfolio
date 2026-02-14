@@ -352,8 +352,8 @@ export default function OrderBuilderPage() {
                                         }}
                                         disabled={!symbol || !previewUnits}
                                         className={`px-3 py-1 rounded-xl border transition-all text-[9px] font-black uppercase tracking-widest flex flex-col items-center justify-center leading-tight min-w-[80px] ${symbol && previewUnits
-                                                ? 'bg-blue-500/10 border-blue-500/30 text-blue-400 hover:bg-blue-500 hover:text-white cursor-pointer shadow-[0_0_10px_rgba(59,130,246,0.1)]'
-                                                : 'bg-white/5 border-white/5 text-gray-600 cursor-not-allowed'
+                                            ? 'bg-blue-500/10 border-blue-500/30 text-blue-400 hover:bg-blue-500 hover:text-white cursor-pointer shadow-[0_0_10px_rgba(59,130,246,0.1)]'
+                                            : 'bg-white/5 border-white/5 text-gray-600 cursor-not-allowed'
                                             }`}
                                         title="Split: 50% @ Price, 25% @ -12.5%, 25% @ -25%"
                                     >
@@ -587,8 +587,8 @@ export default function OrderBuilderPage() {
                                                 </td>
                                                 <td className="p-3">
                                                     <div className="flex items-center gap-2">
-                                                        {LOGO_MAPPING[order.symbol] && (
-                                                            <img src={LOGO_MAPPING[order.symbol]} alt={order.symbol} className="w-4 h-4" />
+                                                        {(assets.find(a => a.symbol === order.symbol)?.logo || LOGO_MAPPING[order.symbol]) && (
+                                                            <img src={assets.find(a => a.symbol === order.symbol)?.logo || LOGO_MAPPING[order.symbol]} alt={order.symbol} className="w-4 h-4 rounded-full" />
                                                         )}
                                                         <span className="text-xs font-black text-white">{order.symbol}</span>
                                                     </div>
