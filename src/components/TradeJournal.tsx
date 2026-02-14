@@ -1,14 +1,30 @@
 "use client";
 import React, { useState } from 'react';
-import { usePortfolio, JournalEntry } from '../context/PortfolioContext';
+import { usePortfolio } from '../context/PortfolioContext';
+import { JournalEntry } from '../data/portfolio';
 
 const currency = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
 
 export default function TradeJournal() {
-    const { journal, addJournalEntry, exportData, importData, resetToDefaults, assets } = usePortfolio();
+    const { journal, addJournalEntry, addOrder, exportData, importData, resetToDefaults, assets, pendingOrders } = usePortfolio();
     const SYMBOLS = assets.map(a => a.symbol);
     const [isOpen, setIsOpen] = useState(false);
+    const [isImportOpen, setIsImportOpen] = useState(false);
     const [showSettings, setShowSettings] = useState(false);
+
+    // Import State
+    const [importText, setImportText] = useState('');
+    const [previewItems, setPreviewItems] = useState<{
+        id: string;
+        type: 'buy' | 'sell';
+        symbol: string;
+        units: number;
+        price: number;
+        status: 'open' | 'executed';
+        date: string;
+        isDuplicate: boolean;
+    }[]>([]);
+    const [showPreview, setShowPreview] = useState(false);
 
     // Form state
     const [symbol, setSymbol] = useState('SUI');
@@ -31,6 +47,130 @@ export default function TradeJournal() {
         setUnits('');
         setNotes('');
         setIsOpen(false);
+    };
+
+    // ─── Bulk Import Logic ───
+    const parseAndProcessHistory = () => {
+        if (!importText.trim()) return;
+
+        const lines = importText.split(/\n/);
+        let processed = 0;
+        let skipped = 0;
+
+        // Simple state machine or sliding window could work, but user pastes row-based data.
+        // Format examples: 
+        // "Limit Sell\n513b7d5\n1,100.00 SUI\n$1.05 Placed 2026-02-13" (multiline)
+        // "Market Buy\tddb364d\t10.086776 UNI\t$34.60 USD\t$3.43\tExecuted\t2026-02-13" (tab separated)
+
+        // We will tokenize the input and look for patterns.
+        const tokenStream = importText.split(/[\t\n]/).map(s => s.trim()).filter(s => s.length > 0);
+
+        // Regex for ID (approx 7 chars hex)
+        const idRegex = /^[a-f0-9]{7}$/i;
+
+        const newItems: typeof previewItems = [];
+
+        for (let i = 0; i < tokenStream.length; i++) {
+            const token = tokenStream[i];
+
+            if (idRegex.test(token)) {
+                const id = token;
+                const isDuplicate = journal.some(j => j.id === id) || pendingOrders.some(o => o.id === id);
+
+                // Look backwards for Type
+                let type: 'buy' | 'sell' = 'buy';
+                if (tokenStream[i - 1] && /sell/i.test(tokenStream[i - 1])) type = 'sell';
+                else if (tokenStream[i - 1] && /buy/i.test(tokenStream[i - 1])) type = 'buy';
+
+                // Look forwards for Units/Symbol
+                let units = 0;
+                let symbol = 'Unknown';
+                if (tokenStream[i + 1]) {
+                    const potentialUnits = tokenStream[i + 1].replace(/,/g, '');
+                    if (!isNaN(parseFloat(potentialUnits))) {
+                        units = parseFloat(potentialUnits);
+                        if (tokenStream[i + 2]) symbol = tokenStream[i + 2];
+                    } else if (tokenStream[i + 1].includes(' ')) {
+                        const parts = tokenStream[i + 1].split(' ');
+                        units = parseFloat(parts[0].replace(/,/g, ''));
+                        symbol = parts[1];
+                    }
+                }
+
+                // Look for Price & Context
+                let price = 0;
+                const window = tokenStream.slice(i, i + 8);
+                const priceToken = window.find(s => s.startsWith('$') && !s.includes('USD'));
+                if (priceToken) {
+                    price = parseFloat(priceToken.replace('$', '').replace(/,/g, ''));
+                }
+
+                const isExecuted = window.some(s => /executed/i.test(s));
+                const isPlaced = window.some(s => /placed/i.test(s));
+
+                const dateRegex = /\d{4}-\d{2}-\d{2}/;
+                const dateToken = window.find(s => dateRegex.test(s));
+                const date = dateToken || new Date().toISOString().split('T')[0];
+
+                if (isExecuted || isPlaced) {
+                    newItems.push({
+                        id,
+                        type,
+                        symbol: symbol.toUpperCase(),
+                        units,
+                        price,
+                        status: isExecuted ? 'executed' : 'open',
+                        date,
+                        isDuplicate
+                    });
+                }
+            }
+        }
+
+        setPreviewItems(newItems);
+        setShowPreview(true);
+        setIsImportOpen(false); // Close text area, show preview
+    };
+
+    const confirmImport = () => {
+        let processed = 0;
+        let skipped = 0;
+
+        previewItems.forEach(item => {
+            if (item.isDuplicate) {
+                skipped++;
+                return;
+            }
+
+            if (item.status === 'executed') {
+                addJournalEntry({
+                    id: item.id,
+                    timestamp: new Date(item.date).toISOString(),
+                    type: item.type,
+                    symbol: item.symbol,
+                    units: item.units,
+                    price: item.price,
+                    notes: 'Imported via bulk tool'
+                });
+            } else {
+                addOrder({
+                    id: item.id,
+                    type: item.type,
+                    symbol: item.symbol,
+                    units: item.units,
+                    price: item.price,
+                    status: 'open',
+                    date: item.date,
+                    note: 'Imported via bulk tool'
+                });
+            }
+            processed++;
+        });
+
+        alert(`Import Complete:\n• ${processed} new entries added.\n• ${skipped} duplicates identified and skipped.`);
+        setImportText('');
+        setShowPreview(false);
+        setPreviewItems([]);
     };
 
     const handleExport = () => {
@@ -68,7 +208,7 @@ export default function TradeJournal() {
     };
 
     return (
-        <div className="flex flex-col h-full">
+        <div className="flex flex-col h-full relative">
             {/* Header */}
             <div className="flex items-center justify-between mb-4">
                 <h3 className="text-sm font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
@@ -85,6 +225,12 @@ export default function TradeJournal() {
                         ⚙
                     </button>
                     <button
+                        onClick={() => setIsImportOpen(true)}
+                        className="text-[10px] font-black text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 px-3 py-1.5 rounded-lg border border-emerald-500/20 uppercase tracking-widest transition-all"
+                    >
+                        Paste History
+                    </button>
+                    <button
                         onClick={() => setIsOpen(!isOpen)}
                         className="text-[10px] font-black text-blue-400 bg-blue-500/10 hover:bg-blue-500/20 px-3 py-1.5 rounded-lg border border-blue-500/20 uppercase tracking-widest transition-all"
                     >
@@ -92,6 +238,88 @@ export default function TradeJournal() {
                     </button>
                 </div>
             </div>
+
+            {/* Paste Import Modal */}
+            {isImportOpen && (
+                <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+                    <div className="w-full max-w-lg bg-[#0b0e11] flex flex-col p-4 rounded-xl border border-white/10 animate-fade-in-up shadow-2xl">
+                        <div className="flex justify-between items-center mb-4">
+                            <h4 className="text-xs font-black text-white uppercase tracking-wider">Paste Browser Data</h4>
+                            <button onClick={() => setIsImportOpen(false)} className="text-xs text-gray-400 hover:text-white">✕</button>
+                        </div>
+                        <textarea
+                            value={importText}
+                            onChange={e => setImportText(e.target.value)}
+                            placeholder="Paste rows from your browser history here..."
+                            className="h-64 bg-[#111] text-[10px] font-mono p-3 rounded-lg border border-white/10 resize-none outline-none focus:border-emerald-500/50 mb-4"
+                        />
+                        <button
+                            onClick={parseAndProcessHistory}
+                            className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-black uppercase tracking-widest rounded-lg transition-all"
+                        >
+                            Review Import
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            {/* Preview Modal */}
+            {showPreview && (
+                <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+                    <div className="w-full max-w-lg max-h-[85vh] bg-[#0b0e11] flex flex-col p-4 rounded-xl border border-white/10 animate-fade-in-up shadow-2xl">
+                        <div className="flex justify-between items-center mb-4">
+                            <h4 className="text-xs font-black text-white uppercase tracking-wider">
+                                Verify Import ({previewItems.filter(i => !i.isDuplicate).length} New)
+                            </h4>
+                            <button onClick={() => { setShowPreview(false); setPreviewItems([]); }} className="text-xs text-gray-400 hover:text-white">✕</button>
+                        </div>
+
+                        <div className="flex-1 overflow-y-auto space-y-2 custom-scrollbar border border-white/5 rounded-lg p-2 bg-[#111] mb-4">
+                            {previewItems.length === 0 ? <span className="text-xs text-gray-500">No valid entries found in text.</span> :
+                                previewItems.map((item, i) => (
+                                    <div key={i} className={`flex items-center justify-between p-2 rounded border text-[10px] ${item.isDuplicate ? 'bg-rose-500/5 border-rose-500/20 opacity-60' : 'bg-emerald-500/5 border-emerald-500/20'}`}>
+                                        <div className="flex items-center gap-2">
+                                            <span className={`font-bold uppercase ${item.type === 'buy' ? 'text-emerald-400' : 'text-rose-400'}`}>{item.type}</span>
+                                            <span className="font-black text-white">{item.units} {item.symbol}</span>
+                                            <span className="text-gray-400">@ {currency.format(item.price)}</span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <span className="font-mono text-gray-500">{item.id}</span>
+                                            {item.isDuplicate
+                                                ? <span className="bg-rose-500/20 text-rose-400 px-1.5 py-0.5 rounded uppercase font-bold tracking-tighter">Skip</span>
+                                                : <span className="bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded uppercase font-bold tracking-tighter">New</span>
+                                            }
+                                        </div>
+                                    </div>
+                                ))}
+                        </div>
+
+                        <div className="flex gap-2">
+                            <button
+                                onClick={() => { setShowPreview(false); setIsImportOpen(true); }}
+                                className="flex-1 py-3 bg-gray-800 hover:bg-gray-700 text-gray-300 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all"
+                            >
+                                Back
+                            </button>
+                            {previewItems.some(i => !i.isDuplicate) ? (
+                                <button
+                                    onClick={confirmImport}
+                                    className="flex-[2] py-3 bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-black uppercase tracking-widest rounded-lg transition-all"
+                                >
+                                    Confirm Import ({previewItems.filter(i => !i.isDuplicate).length})
+                                </button>
+                            ) : (
+                                <button
+                                    onClick={() => { setShowPreview(false); setPreviewItems([]); }}
+                                    className="flex-[2] py-3 bg-gray-700 hover:bg-gray-600 text-white text-[10px] font-black uppercase tracking-widest rounded-lg transition-all"
+                                >
+                                    Finish (0 New Entries)
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Settings Panel */}
             {showSettings && (

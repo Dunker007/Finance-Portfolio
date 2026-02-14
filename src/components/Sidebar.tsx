@@ -11,7 +11,7 @@ const currency = new Intl.NumberFormat('en-US', { style: 'currency', currency: '
 const Sidebar = () => {
     const pathname = usePathname();
     const router = useRouter();
-    const { assets, activeAccount, switchAccount, activeStrategy } = usePortfolio();
+    const { assets, activeAccount, switchAccount, activeStrategy, pendingOrders, marketCondition } = usePortfolio();
     const [isOpen, setIsOpen] = useState(false);
 
     const suiAsset = assets.find(a => a.symbol === 'SUI');
@@ -86,7 +86,7 @@ const Sidebar = () => {
                                     onClick={() => {
                                         switchAccount(id);
                                         setIsOpen(false);
-                                        if (pathname === '/aum') router.push('/');
+                                        if (pathname === '/aum' || pathname === '/market') router.push('/');
                                     }}
                                     className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl transition-all text-left ${isActive
                                         ? 'bg-blue-500/10 border border-blue-500/30 shadow-[0_0_10px_rgba(59,130,246,0.15)]'
@@ -133,16 +133,8 @@ const Sidebar = () => {
                     </Link>
                 </div>
 
-                {/* Nav */}
-                <nav className="flex-1 px-4 space-y-1">
-                    <NavItem icon="📊" label="Strategic Hub" href="/" active={pathname === '/'} onClick={() => setIsOpen(false)} />
-                    <NavItem icon="🛒" label="Order Builder" href="/orders" active={pathname === '/orders'} onClick={() => setIsOpen(false)} />
-                    <NavItem icon="🛡️" label="Risk Guard" href="/risk" active={pathname === '/risk'} onClick={() => setIsOpen(false)} />
-                    <NavItem icon="📋" label="Portfolio Report" href="/report" active={pathname === '/report'} onClick={() => setIsOpen(false)} />
-                </nav>
-
                 {/* Strategy Pulse */}
-                <div className="p-6 mt-auto">
+                <div className="px-6 pb-6 pt-2">
                     <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/5 space-y-4">
                         <div className="flex items-center justify-between">
                             <span className="text-[10px] text-gray-500 font-black uppercase tracking-widest">Strategy Pulse</span>
@@ -151,29 +143,88 @@ const Sidebar = () => {
                         <div className="flex flex-col gap-1">
                             <div className="flex justify-between items-end">
                                 <span className="text-xs font-black text-white uppercase tracking-tighter">
-                                    {activeStrategy.name.split('—')[0].trim()}
+                                    {/* Dynamic Strategy Status */}
+                                    {pendingOrders.some(o => o.symbol === 'SUI' && o.type === 'sell') ? 'Pending Rebalance'
+                                        : pendingOrders.length > 0 ? 'Active Deployment'
+                                            : activeAccount === 'sui' && (suiAsset?.allocation || 0) > 60 ? 'Harvest Required'
+                                                : activeStrategy.name.split('—')[0].trim()}
                                 </span>
-                                <span className="text-[10px] font-mono text-blue-400">{pulsePercent.toFixed(1)}%</span>
+                                <span className={`text-[10px] font-mono ${pendingOrders.length > 0 ? 'text-amber-400 animate-pulse' : 'text-blue-400'}`}>
+                                    {pulsePercent.toFixed(1)}%
+                                </span>
                             </div>
                             <div className="h-1 w-full bg-white/5 rounded-full overflow-hidden">
                                 <div
-                                    className="h-full bg-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.5)] transition-all duration-1000"
-                                    style={{ width: `${Math.min(pulsePercent, 100)}%` }}
+                                    className={`h-full shadow-[0_0_10px_rgba(59,130,246,0.5)] transition-all duration-1000 ${pendingOrders.length > 0 ? 'bg-amber-500 w-full animate-pulse' // Show full amber bar if working
+                                        : 'bg-blue-500'}`}
+                                    style={{ width: pendingOrders.length > 0 ? '100%' : `${Math.min(pulsePercent, 100)}%` }}
                                 ></div>
                             </div>
                         </div>
                         <p className="text-[9px] text-gray-600 font-medium leading-relaxed uppercase tracking-tight">
-                            {pulseLabel}: {pulsePercent > 50 ? 'Strong' : 'Building'}. {activeAccount === 'sui' ? 'Monitoring Alt Rotations.' : 'Balanced Rotation Active.'}
+                            {pendingOrders.length > 0
+                                ? <span className="text-amber-500/80">⚠️ Execution In Progress. {pendingOrders.length} orders staged.</span>
+                                : <>{pulseLabel}: {pulsePercent > 50 ? 'Strong' : 'Building'}. {activeAccount === 'sui' ? 'Monitoring Alt Rotations.' : 'Balanced Rotation Active.'}</>
+                            }
                         </p>
                     </div>
+
+                    {/* Market Signal Tile */}
+                    <Link href="/market" className="block mt-2 p-3 rounded-xl bg-white/[0.02] border border-white/5 hover:bg-white/[0.05] transition-all group">
+                        <div className="flex items-center justify-between mb-2">
+                            <span className="text-[9px] text-gray-500 font-black uppercase tracking-widest group-hover:text-blue-400 transition-colors">Macro Signal</span>
+                            <span className="text-xs group-hover:scale-110 transition-transform">
+                                {marketCondition === 'bull' ? '🚀'
+                                    : marketCondition === 'bear' ? '🛡️'
+                                        : marketCondition === 'accumulation' ? '🧺'
+                                            : marketCondition === 'distribution' ? '💰'
+                                                : '🌊'}
+                            </span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                            <span className={`text-[10px] font-black uppercase tracking-wider ${marketCondition === 'bull' ? 'text-blue-400'
+                                : marketCondition === 'bear' ? 'text-rose-400'
+                                    : marketCondition === 'accumulation' ? 'text-emerald-400'
+                                        : marketCondition === 'distribution' ? 'text-amber-400'
+                                            : 'text-gray-400'
+                                }`}>
+                                {marketCondition === 'bull' ? 'Risk On'
+                                    : marketCondition === 'bear' ? 'Risk Off'
+                                        : marketCondition === 'accumulation' ? 'Accumulate'
+                                            : marketCondition === 'distribution' ? 'Profit Take'
+                                                : 'Choppy'}
+                            </span>
+                            <span className="text-[9px] text-gray-600 font-mono group-hover:text-white transition-colors">Set &rarr;</span>
+                        </div>
+                    </Link>
                 </div>
+
+                {/* Nav */}
+                <nav className="flex-1 px-4 space-y-1">
+                    <NavItem icon="📊" label="Strategic Hub" href="/" active={pathname === '/'} onClick={() => setIsOpen(false)} />
+                    <NavItem icon="🛒" label="Order Builder" href="/orders" active={pathname === '/orders'} onClick={() => setIsOpen(false)} />
+                    <NavItem icon="🛡️" label="Risk Guard" href="/risk" active={pathname === '/risk'} onClick={() => setIsOpen(false)} />
+                    <NavItem icon="📋" label="Portfolio Report" href="/report" active={pathname === '/report'} onClick={() => setIsOpen(false)} />
+                </nav>
+
+                {/* Spacer to push Nav down or Footer down? User said "below AUM". 
+                    If I put Pulse below AUM, Nav follows Pulse. 
+                    I'll add a spacer if needed, but flex-col naturally stacks them. 
+                    I will simply remove the old Pulse block. 
+                */}
 
                 {/* Account Footer */}
                 <div className="p-6 border-t border-white/5 flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-[10px] font-bold text-gray-400">IRA</div>
+                    <div className="w-8 h-8 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-[10px] font-bold text-gray-400">
+                        {pathname === '/aum' ? '💰' : 'IRA'}
+                    </div>
                     <div className="flex flex-col">
-                        <span className="text-[11px] font-black text-white">Roth Alto ({ACCOUNTS[activeAccount].accountNumber})</span>
-                        <span className="text-[9px] text-emerald-400 font-bold">CONNECTED</span>
+                        <span className="text-[11px] font-black text-white">
+                            {pathname === '/aum' ? 'Combined Portfolio' : ACCOUNTS[activeAccount].accountName}
+                        </span>
+                        <span className={`text-[9px] font-bold ${pathname === '/aum' ? 'text-purple-400' : 'text-emerald-400'}`}>
+                            {pathname === '/aum' ? '2 ACCOUNTS ACTIVE' : `${ACCOUNTS[activeAccount].accountNumber} • CONNECTED`}
+                        </span>
                     </div>
                 </div>
             </aside>

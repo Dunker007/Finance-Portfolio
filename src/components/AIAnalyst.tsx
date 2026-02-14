@@ -1,20 +1,115 @@
 "use client";
-import React, { useState, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { usePortfolio } from '../context/PortfolioContext';
 
+// ─── Persona Definitions ───
+const PERSONAS = {
+    sui: {
+        name: 'The Anchor',
+        role: 'Strategic Accumulation Manager',
+        icon: '⚓',
+        color: 'text-blue-400',
+        bg: 'bg-blue-500/10',
+        border: 'border-blue-500/20',
+        gradient: 'from-blue-900/50 to-blue-600/10',
+        voice: 'Disciplined. Mathematical. Obsessed with 60/40 ratio.',
+    },
+    alts: {
+        name: 'The Tactician',
+        role: 'High Conviction Rotator',
+        icon: '⚡',
+        color: 'text-purple-400',
+        bg: 'bg-purple-500/10',
+        border: 'border-purple-500/20',
+        gradient: 'from-purple-900/50 to-purple-600/10',
+        voice: 'Agile. Anti-bloat. Maximizing the High Conviction 5.',
+    }
+};
+
 export default function AIAnalyst() {
-    const { activeStrategy, activeAccount, assets } = usePortfolio();
+    const { activeStrategy, activeAccount, assets, pendingOrders, marketCondition } = usePortfolio();
     const [query, setQuery] = useState('');
-    const [history, setHistory] = useState<{ role: 'user' | 'ai', text: string, timestamp: string }[]>([
-        { role: 'ai', text: `Strategy loaded: ${activeStrategy.name}. Account: ${activeStrategy.accountLabel}. Mode: MANUAL. Ready to assist with ${activeAccount === 'sui' ? 'SUI-anchored swing plays' : 'balanced alt rotation'}. What's on your mind?`, timestamp: 'Just now' }
-    ]);
+    const [history, setHistory] = useState<{ role: 'user' | 'ai'; text: string; timestamp: string }[]>([]);
     const [isTyping, setIsTyping] = useState(false);
     const bottomRef = useRef<HTMLDivElement>(null);
+    const [primaryDirective, setPrimaryDirective] = useState<{ title: string; desc: string; type: 'alert' | 'success' | 'info' } | null>(null);
 
-    const RULES_DISPLAY = activeStrategy.rules.slice(0, 3).map(r => r.split('—')[0].trim());
-
+    const persona = PERSONAS[activeAccount];
     const totalValue = assets.reduce((s, a) => s + a.currentValue, 0);
-    const cashPercent = ((assets.find(a => a.symbol === 'USD')?.currentValue || 0) / totalValue * 100).toFixed(1);
+    const cashAsset = assets.find(a => a.symbol === 'USD');
+    const cashPercent = ((cashAsset?.currentValue || 0) / totalValue * 100);
+
+    // ─── Ongoing Analysis Engine ───
+    useEffect(() => {
+        // Run analysis when account/assets change
+        const analyze = () => {
+            if (activeAccount === 'sui') {
+                const sui = assets.find(a => a.symbol === 'SUI');
+                const suiAlloc = sui?.allocation || 0;
+
+                if (suiAlloc > 62) {
+                    setPrimaryDirective({
+                        title: 'OVERWEIGHT DETECTED',
+                        desc: `SUI is at ${suiAlloc.toFixed(1)}% (Target 60%). Recommend trimming to restore cash buffer.`,
+                        type: 'alert'
+                    });
+                } else if (cashPercent < 10) {
+                    setPrimaryDirective({
+                        title: 'CASH CRITICAL',
+                        desc: 'Liquidity below 10%. Stop buying. Prioritize SUI trims on next pump.',
+                        type: 'alert'
+                    });
+                } else if (pendingOrders.length > 0) {
+                    setPrimaryDirective({
+                        title: 'EXECUTION PHASE',
+                        desc: `${pendingOrders.length} orders active. Monitoring fills.`,
+                        type: 'info'
+                    });
+                } else {
+                    setPrimaryDirective({
+                        title: 'ACCUMULATION MODE',
+                        desc: 'Portfolio balanced. Maintain 60/40 drift checks.',
+                        type: 'success'
+                    });
+                }
+            } else {
+                // Alts Analysis
+                const positionCount = assets.filter(a => a.symbol !== 'USD' && a.currentValue > 10).length;
+                const maxConc = Math.max(...assets.filter(a => a.symbol !== 'USD').map(a => a.allocation));
+
+                if (positionCount > 5) {
+                    setPrimaryDirective({
+                        title: 'BLOAT WARNING',
+                        desc: `Holding ${positionCount} positions. Doctrine limit is 5. Consolidate conviction.`,
+                        type: 'alert'
+                    });
+                } else if (maxConc > 22) {
+                    setPrimaryDirective({
+                        title: 'CONCENTRATION RISK',
+                        desc: `Single asset > 22%. Consider trimming to rebalance into laggards.`,
+                        type: 'alert'
+                    });
+                } else {
+                    setPrimaryDirective({
+                        title: 'HIGH CONVICTION',
+                        desc: 'Core 5 structure intact. Monitoring rotation opportunities.',
+                        type: 'success'
+                    });
+                }
+            }
+        };
+
+        analyze();
+        // Reset chat on switch
+        setHistory([{
+            role: 'ai',
+            text: activeAccount === 'sui'
+                ? `Anchor System Online. SUI Allocation: ${(assets.find(a => a.symbol === 'SUI')?.allocation || 0).toFixed(1)}%. Tracking 60/40 adherence. How can I assist?`
+                : `Tactician Online. Monitoring High Conviction 5. Market Regime: ${marketCondition?.toUpperCase() || 'UNKNOWN'}. Ready for rotation logic.`,
+            timestamp: 'Just now'
+        }]);
+    }, [activeAccount, assets, pendingOrders, marketCondition]);
+
 
     const handleSend = () => {
         if (!query.trim()) return;
@@ -28,85 +123,125 @@ export default function AIAnalyst() {
             setHistory(prev => [...prev, { role: 'ai', text: response, timestamp: 'Just now' }]);
             setIsTyping(false);
             bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-        }, 800 + Math.random() * 700);
+        }, 600 + Math.random() * 500);
     };
 
     const generateResponse = (q: string): string => {
-        const fee = '1% trade fee';
-
-        // Account-specific responses
         if (activeAccount === 'sui') {
-            if (q.includes('sui')) return `SUI is your king at ${(assets.find(a => a.symbol === 'SUI')?.allocation || 0).toFixed(1)}%. Strategy: never below 40-45%, compound over years. Pending ladder sells at $1.02/$1.05 to rebuild cash (currently ${cashPercent}% — critical). ${fee} per move.`;
-            if (q.includes('cash')) return `Cash at ${cashPercent}% — CRITICAL vs 25% target. Priority #1: trim SUI on strength to rebuild. Your ladder sells ($1.02/$1.05) are the engine. No new alt entries until cash improves.`;
-            if (q.includes('link') || q.includes('aave') || q.includes('imx')) return `Alt positions are tactical swings. Enter on dips (10%+), take 20-50% profits, recycle to SUI or cash. Current alts are small — that's correct for SUI-king strategy.`;
+            if (q.includes('buy') || q.includes('entry')) return "Only buy on >10% dips from here. We are anchoring, not chasing. Check cash reserves first.";
+            if (q.includes('sell') || q.includes('trim')) return "If SUI > 60%, trim aggressively. If < 60%, hold. Do not over-trade the anchor.";
+            if (q.includes('status')) return `SUI: ${(assets.find(a => a.symbol === 'SUI')?.allocation || 0).toFixed(1)}%. Cash: ${cashPercent.toFixed(1)}%. We are ${cashPercent < 20 ? 'cash poor' : 'liquid'}.`;
         } else {
-            if (q.includes('ondo')) return `ONDO at ${(assets.find(a => a.symbol === 'ONDO')?.allocation || 0).toFixed(1)}% — up ~8-9% today. You're green (+$48). Pending dip buys at $0.189/$0.229, sell target at $0.398 (~47% profit). Balanced position. ${fee} per move.`;
-            if (q.includes('render')) return `RENDER at ${(assets.find(a => a.symbol === 'RENDER')?.allocation || 0).toFixed(1)}% — biggest loss (-$694). Entry was high ($1.86). Dip buys at $1.058/$1.201 to average down. Sell target at $1.99 for recovery. Patience here.`;
-            if (q.includes('fet')) return `FET at ${(assets.find(a => a.symbol === 'FET')?.allocation || 0).toFixed(1)}% — nearly flat (-$0.57). Solid accumulation at $0.17. Dip buys at $0.148/$0.151, sell target at $0.2515 (~50% profit). Well-positioned.`;
-            if (q.includes('uni')) return `UNI at ${(assets.find(a => a.symbol === 'UNI')?.allocation || 0).toFixed(1)}% — small loss (-$33). Dip buys at $2.79/$3.12, moonshot sell at $5.18. Classic swing setup. ${fee} per move.`;
-            if (q.includes('hype')) return `HYPE is your smallest position at ${(assets.find(a => a.symbol === 'HYPE')?.allocation || 0).toFixed(1)}% — green (+$11). Dip buys at $23.59/$27, aggressive sell at $47.17 (~49%). High beta play. ${fee} per move.`;
-            if (q.includes('cash')) return `Cash at ${cashPercent}% — healthy and within your 20-40% target range. Good dry powder for dip entries. No urgency to deploy unless opportunities arise.`;
+            if (q.includes('buy')) return "Is this one of the High Conviction 5? If not, ignore it. Do not dilute focus.";
+            if (q.includes('sell')) return "Take profits at 20-30% pumps to rotate into laggards. Keep the wheel spinning.";
         }
-
-        if (q.includes('strateg') || q.includes('plan')) return `${activeStrategy.name}: ${activeStrategy.rules[0]} Target: ${activeStrategy.targetMask}. Cash at ${cashPercent}%.`;
-        if (q.includes('fee')) return `Alto charges ${fee} on every buy and sell. Factor this into your entry/exit sizing — avoid churning small positions.`;
-        if (q.includes('roth') || q.includes('tax')) return `Both accounts are converted Roths. All gains tax-free — perfect for active swing trading without IRS drag.`;
-
-        return `I'm tracking ${assets.filter(a => a.symbol !== 'USD').length} positions in this account. Cash at ${cashPercent}%. Strategy: ${activeStrategy.name}. Ask me about any specific coin, your cash position, fees, or strategy.`;
+        return "I am analyzing the live feed. Please specify a ticker or strategic move.";
     };
 
     return (
-        <div className="flex flex-col h-full p-5">
-            <div className="flex items-center justify-between mb-4">
-                <h3 className="text-sm font-black text-gray-400 uppercase tracking-widest">AI Analyst</h3>
-                <span className="text-[9px] text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded border border-blue-500/20 font-bold">
-                    {activeAccount === 'sui' ? '👑 SUI' : '🔄 ALTS'}
-                </span>
+        <div className={`flex flex-col h-full overflow-hidden relative ${persona.gradient} bg-opacity-20`}>
+            {/* ═══ COMMAND HEADER ═══ */}
+            <div className={`p-4 border-b ${persona.border} bg-black/20 backdrop-blur-md flex items-center justify-between`}>
+                <div className="flex items-center gap-3">
+                    <div className={`w-10 h-10 rounded-xl ${persona.bg} border ${persona.border} flex items-center justify-center text-xl shadow-[0_0_15px_rgba(0,0,0,0.3)]`}>
+                        {persona.icon}
+                    </div>
+                    <div>
+                        <h3 className={`text-sm font-black uppercase tracking-widest ${persona.color} drop-shadow-sm`}>
+                            {persona.name}
+                        </h3>
+                        <span className="text-[9px] text-gray-400 font-mono tracking-wider uppercase">
+                            {persona.role}
+                        </span>
+                    </div>
+                </div>
+                <div className="flex flex-col items-end">
+                    <div className="flex items-center gap-1.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_8px_#10b981]"></span>
+                        <span className="text-[9px] font-bold text-emerald-500 uppercase tracking-widest">Online</span>
+                    </div>
+                    <span className="text-[8px] text-gray-500">{activeAccount === 'sui' ? 'v4.2.0 Anchor' : 'v9.1.1 Tactician'}</span>
+                </div>
             </div>
 
-            {/* Rules chips */}
-            <div className="flex flex-wrap gap-1.5 mb-4">
-                {RULES_DISPLAY.map((rule, i) => (
-                    <span key={i} className="text-[8px] bg-white/5 border border-white/10 px-2 py-1 rounded-full text-gray-500 font-medium">
-                        {rule}
-                    </span>
-                ))}
-            </div>
+            {/* ═══ PRIMARY DIRECTIVE CARD ═══ */}
+            {primaryDirective && (
+                <div className="px-4 pt-4">
+                    <div className={`p-3 rounded-lg border-l-2 flex items-start gap-3 shadow-lg transition-all hover:scale-[1.01] ${primaryDirective.type === 'alert'
+                        ? 'bg-rose-500/10 border-l-rose-500 border-y border-r border-rose-500/10'
+                        : primaryDirective.type === 'info'
+                            ? 'bg-blue-500/10 border-l-blue-500 border-y border-r border-blue-500/10'
+                            : 'bg-emerald-500/10 border-l-emerald-500 border-y border-r border-emerald-500/10'}`}>
+                        <div className={`mt-0.5 text-lg ${primaryDirective.type === 'alert' ? 'animate-bounce' : ''}`}>
+                            {primaryDirective.type === 'alert' ? '⚠️' : primaryDirective.type === 'info' ? 'ℹ️' : '✅'}
+                        </div>
+                        <div>
+                            <h4 className={`text-[10px] font-black uppercase tracking-widest mb-0.5 ${primaryDirective.type === 'alert' ? 'text-rose-400'
+                                    : primaryDirective.type === 'info' ? 'text-blue-400'
+                                        : 'text-emerald-400'
+                                }`}>
+                                {primaryDirective.title}
+                            </h4>
+                            <p className="text-[10px] text-gray-300 leading-relaxed font-medium">
+                                {primaryDirective.desc}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            )}
 
-            {/* Chat */}
-            <div className="flex-1 overflow-y-auto space-y-3 mb-4 custom-scrollbar">
+            {/* ═══ CHAT STREAM ═══ */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
                 {history.map((msg, i) => (
-                    <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                        <div className={`max-w-[85%] px-3 py-2 rounded-xl text-xs leading-relaxed ${msg.role === 'user'
-                                ? 'bg-blue-600/20 text-blue-200 border border-blue-500/20'
-                                : 'bg-white/5 text-gray-300 border border-white/5'
+                    <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-fade-in`}>
+                        <div className={`max-w-[85%] rounded-2xl px-4 py-3 text-[11px] leading-relaxed relative shadow-md ${msg.role === 'user'
+                                ? 'bg-blue-600/20 text-blue-100 border border-blue-500/30 rounded-br-none'
+                                : `bg-[#1a1a1a] text-gray-300 border ${persona.border} rounded-bl-none`
                             }`}>
+                            {/* AI Avatar for messages */}
+                            {msg.role === 'ai' && (
+                                <div className={`absolute -left-2 -top-2 w-4 h-4 rounded-full ${persona.bg} border ${persona.border} flex items-center justify-center text-[8px]`}>
+                                    {persona.icon}
+                                </div>
+                            )}
                             {msg.text}
                         </div>
                     </div>
                 ))}
                 {isTyping && (
                     <div className="flex justify-start">
-                        <div className="px-3 py-2 rounded-xl bg-white/5 border border-white/5">
-                            <span className="text-gray-500 text-xs animate-pulse">Analyzing...</span>
+                        <div className="px-4 py-2 rounded-xl bg-white/5 border border-white/5 flex gap-1 items-center">
+                            <span className="w-1 h-1 bg-gray-500 rounded-full animate-bounce [animation-delay:-0.3s]"></span>
+                            <span className="w-1 h-1 bg-gray-500 rounded-full animate-bounce [animation-delay:-0.15s]"></span>
+                            <span className="w-1 h-1 bg-gray-500 rounded-full animate-bounce"></span>
                         </div>
                     </div>
                 )}
                 <div ref={bottomRef} />
             </div>
 
-            {/* Input */}
-            <div className="flex gap-2">
-                <input
-                    value={query}
-                    onChange={e => setQuery(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && handleSend()}
-                    placeholder="Ask about strategy, positions..."
-                    className="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-xs text-white placeholder-gray-600 outline-none focus:border-blue-500/50 transition-all"
-                />
-                <button onClick={handleSend} className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-[10px] font-black uppercase tracking-widest rounded-lg transition-all">
-                    Send
-                </button>
+            {/* ═══ INPUT FIELD ═══ */}
+            <div className="p-4 bg-black/40 backdrop-blur-md border-t border-white/5">
+                <div className="flex gap-2 items-center bg-[#0b0e11] border border-white/10 rounded-xl px-2 py-1 focus-within:border-blue-500/50 transition-colors shadow-inner">
+                    <input
+                        value={query}
+                        onChange={e => setQuery(e.target.value)}
+                        onKeyDown={e => e.key === 'Enter' && handleSend()}
+                        placeholder={`Message ${persona.name}...`}
+                        className="flex-1 bg-transparent px-2 py-2 text-xs text-white placeholder-gray-600 outline-none font-medium"
+                    />
+                    <button
+                        onClick={handleSend}
+                        disabled={!query.trim()}
+                        className={`p-2 rounded-lg transition-all ${query.trim() ? 'text-blue-400 hover:text-blue-300 hover:bg-blue-500/10' : 'text-gray-700'}`}
+                    >
+                        ➤
+                    </button>
+                </div>
+                <div className="flex justify-between mt-2 px-1">
+                    <span className="text-[9px] text-gray-600 font-mono">Strategy: {activeStrategy.name}</span>
+                    <span className="text-[9px] text-gray-600 font-mono">Mode: {marketCondition ? marketCondition.toUpperCase() : 'MANUAL'}</span>
+                </div>
             </div>
         </div>
     );

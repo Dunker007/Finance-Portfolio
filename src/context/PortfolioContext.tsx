@@ -1,6 +1,6 @@
 "use client";
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
-import { ACCOUNTS, AccountId, Asset, Order, AccountData } from '../data/portfolio';
+import { ACCOUNTS, AccountId, Asset, Order, AccountData, JournalEntry } from '../data/portfolio';
 import { STRATEGIES, Strategy } from '../data/strategy';
 
 // ─── localStorage helpers ───
@@ -28,15 +28,7 @@ function saveToStorage(key: string, value: unknown) {
 }
 
 // ─── Journal Entry ───
-export interface JournalEntry {
-    id: string;
-    timestamp: string;
-    symbol: string;
-    type: 'buy' | 'sell' | 'note';
-    price?: number;
-    units?: number;
-    notes: string;
-}
+// JournalEntry imported from data/portfolio
 
 // ─── Context Interface ───
 interface PortfolioContextType {
@@ -48,6 +40,8 @@ interface PortfolioContextType {
 
     // State
     totalValue: number;
+    targetValue: number;
+    setTargetValue: (v: number) => void;
     cashBalance: number;
     assets: Asset[];
     pendingOrders: Order[];
@@ -60,11 +54,13 @@ interface PortfolioContextType {
     recyclePnL: (symbol: string) => void;
     fillOrder: (orderId: string) => void;
     killOrder: (orderId: string) => void;
-    addOrder: (order: Omit<Order, 'id' | 'status' | 'date'>) => void;
-    addJournalEntry: (entry: Omit<JournalEntry, 'id' | 'timestamp'>) => void;
+    addOrder: (order: Omit<Order, 'status' | 'id' | 'date'> & { status?: 'open' | 'filled' | 'cancelled'; date?: string; id?: string }) => void;
+    addJournalEntry: (entry: Omit<JournalEntry, 'id' | 'timestamp'> & { id?: string; timestamp?: string }) => void;
     resetToDefaults: () => void;
     exportData: () => string;
     importData: (json: string) => boolean;
+    marketCondition: 'accumulation' | 'bull' | 'bear' | 'distribution' | 'choppiness';
+    setMarketCondition: (condition: 'accumulation' | 'bull' | 'bear' | 'distribution' | 'choppiness') => void;
 }
 
 const PortfolioContext = createContext<PortfolioContextType | undefined>(undefined);
@@ -76,7 +72,8 @@ function loadAccountState(accountId: AccountId) {
         assets: loadFromStorage<Asset[]>(storageKey(accountId, 'assets'), seed.assets),
         pendingOrders: loadFromStorage<Order[]>(storageKey(accountId, 'orders'), seed.pendingOrders),
         recycledToSui: loadFromStorage<number>(storageKey(accountId, 'recycled'), seed.recycledToSui || 0),
-        journal: loadFromStorage<JournalEntry[]>(storageKey(accountId, 'journal'), []),
+        journal: loadFromStorage<JournalEntry[]>(storageKey(accountId, 'journal'), seed.journal || []),
+        targetValue: loadFromStorage<number>(storageKey(accountId, 'target'), seed.targetValue || 0),
     };
 }
 
@@ -86,11 +83,13 @@ function saveAccountState(accountId: AccountId, state: {
     pendingOrders: Order[];
     recycledToSui: number;
     journal: JournalEntry[];
+    targetValue: number;
 }) {
     saveToStorage(storageKey(accountId, 'assets'), state.assets);
     saveToStorage(storageKey(accountId, 'orders'), state.pendingOrders);
     saveToStorage(storageKey(accountId, 'recycled'), state.recycledToSui);
     saveToStorage(storageKey(accountId, 'journal'), state.journal);
+    saveToStorage(storageKey(accountId, 'target'), state.targetValue);
 }
 
 // ═══════════════════════════════════════════════════
@@ -102,8 +101,10 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     const [assets, setAssets] = useState<Asset[]>(ACCOUNTS.sui.assets);
     const [pendingOrders, setPendingOrders] = useState<Order[]>(ACCOUNTS.sui.pendingOrders);
     const [recycledToSui, setRecycledToSui] = useState(ACCOUNTS.sui.recycledToSui || 0);
+    const [targetValue, setTargetValue] = useState(ACCOUNTS.sui.targetValue || 35000);
     const [marketTrends] = useState(ACCOUNTS.sui.marketTrends);
     const [journal, setJournal] = useState<JournalEntry[]>([]);
+    const [marketCondition, setMarketCondition] = useState<'accumulation' | 'bull' | 'bear' | 'distribution' | 'choppiness'>('accumulation');
 
     const activeStrategy = STRATEGIES[activeAccount];
     const accountData = ACCOUNTS[activeAccount];
@@ -117,6 +118,7 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         setPendingOrders(state.pendingOrders);
         setRecycledToSui(state.recycledToSui);
         setJournal(state.journal);
+        setTargetValue(state.targetValue);
         setMounted(true);
     }, []);
 
@@ -125,8 +127,9 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     useEffect(() => {
         if (!mounted) return;
         if (!hasHydrated.current) { hasHydrated.current = true; return; }
-        saveAccountState(activeAccount, { assets, pendingOrders, recycledToSui, journal });
-    }, [assets, pendingOrders, recycledToSui, journal, mounted, activeAccount]);
+        if (!hasHydrated.current) { hasHydrated.current = true; return; }
+        saveAccountState(activeAccount, { assets, pendingOrders, recycledToSui, journal, targetValue });
+    }, [assets, pendingOrders, recycledToSui, journal, targetValue, mounted, activeAccount]);
 
     // Derived values
     const cashBalance = assets.find(a => a.symbol === 'USD')?.currentValue || 0;
@@ -137,7 +140,7 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         if (id === activeAccount) return;
 
         // Save current account state
-        saveAccountState(activeAccount, { assets, pendingOrders, recycledToSui, journal });
+        saveAccountState(activeAccount, { assets, pendingOrders, recycledToSui, journal, targetValue });
 
         // Load target account
         const state = loadAccountState(id);
@@ -146,10 +149,11 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         setPendingOrders(state.pendingOrders);
         setRecycledToSui(state.recycledToSui);
         setJournal(state.journal);
+        setTargetValue(state.targetValue);
 
         // Remember active account
         saveToStorage(`${STORAGE_PREFIX}activeAccount`, id);
-    }, [activeAccount, assets, pendingOrders, recycledToSui, journal]);
+    }, [activeAccount, assets, pendingOrders, recycledToSui, journal, targetValue]);
 
     // ─── Market Simulation ───
     useEffect(() => {
@@ -216,14 +220,18 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         setPendingOrders(prev => prev.filter(o => o.id !== id));
     }, []);
 
-    const addOrder = useCallback((order: Omit<Order, 'id' | 'status' | 'date'>) => {
+    const addOrder = useCallback((order: Omit<Order, 'status' | 'id' | 'date'> & { status?: 'open' | 'filled' | 'cancelled'; date?: string; id?: string }) => {
+        const { date, status, id, ...rest } = order;
         const newOrder: Order = {
-            ...order,
-            id: `${order.symbol}-${order.type}-${Date.now()}`,
-            status: 'open',
-            date: new Date().toISOString().split('T')[0],
+            ...rest,
+            status: status || 'open',
+            date: date || new Date().toISOString().split('T')[0],
+            id: id || `${order.symbol}-${order.type}-${Date.now()}`,
         };
-        setPendingOrders(prev => [...prev, newOrder]);
+        setPendingOrders(prev => {
+            if (prev.some(o => o.id === newOrder.id)) return prev;
+            return [...prev, newOrder];
+        });
     }, []);
 
     const fillOrder = useCallback((id: string) => {
@@ -251,13 +259,16 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         setPendingOrders(prev => prev.filter(o => o.id !== id));
     }, [pendingOrders]);
 
-    const addJournalEntry = useCallback((entry: Omit<JournalEntry, 'id' | 'timestamp'>) => {
+    const addJournalEntry = useCallback((entry: Omit<JournalEntry, 'id' | 'timestamp'> & { id?: string; timestamp?: string }) => {
         const newEntry: JournalEntry = {
-            ...entry,
             id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
             timestamp: new Date().toISOString(),
+            ...entry,
         };
-        setJournal(prev => [newEntry, ...prev]);
+        setJournal(prev => {
+            if (prev.some(e => e.id === newEntry.id)) return prev; // Dedup
+            return [newEntry, ...prev];
+        });
     }, []);
 
     const resetToDefaults = useCallback(() => {
@@ -265,9 +276,10 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         setAssets(seed.assets);
         setPendingOrders(seed.pendingOrders);
         setRecycledToSui(seed.recycledToSui || 0);
-        setJournal([]);
+        setJournal(seed.journal || []);
+        setTargetValue(seed.targetValue || (activeAccount === 'sui' ? 35000 : 200000));
         // Clear localStorage for this account
-        ['assets', 'orders', 'recycled', 'journal'].forEach(key =>
+        ['assets', 'orders', 'recycled', 'journal', 'target'].forEach(key =>
             localStorage.removeItem(storageKey(activeAccount, key))
         );
     }, [activeAccount]);
@@ -296,6 +308,8 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
             accountData,
             switchAccount,
             totalValue,
+            targetValue,
+            setTargetValue,
             cashBalance,
             assets,
             pendingOrders,
@@ -310,7 +324,9 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
             addJournalEntry,
             resetToDefaults,
             exportData,
-            importData
+            importData,
+            marketCondition,
+            setMarketCondition
         }}>
             {children}
         </PortfolioContext.Provider>

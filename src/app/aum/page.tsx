@@ -129,7 +129,15 @@ export default function AUMDashboard() {
     const allPendingOrders = useMemo(() => {
         const activeOrders = pendingOrders.map(o => ({ ...o, account: activeAccount }));
         const otherOrders = ACCOUNTS[otherAccountId].pendingOrders.map(o => ({ ...o, account: otherAccountId }));
-        return [...activeOrders, ...otherOrders];
+
+        // De-dupe by ID (priority to active account)
+        const combined = [...activeOrders, ...otherOrders];
+        const uniqueMap = new Map();
+        combined.forEach(o => {
+            if (!uniqueMap.has(o.id)) uniqueMap.set(o.id, o);
+        });
+
+        return Array.from(uniqueMap.values());
     }, [pendingOrders, activeAccount, otherAccountId]);
 
     const totalStagedValue = allPendingOrders.reduce((s, o) => s + o.units * o.price, 0);

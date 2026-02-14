@@ -30,7 +30,6 @@ export interface AccountData {
     accountName: string;
     accountNumber: string;
     totalValue: number;
-    targetValue?: number; // Moon Goal
     cashBalance: number;
     availableCash: number;
     totalGainLoss: number;
@@ -78,7 +77,6 @@ export const SUI_ACCOUNT_DATA: AccountData = {
     accountName: 'SUI Account',
     accountNumber: '#82367',
     totalValue: 3589.45,
-    targetValue: 35000, // 10x Moon Goal
     cashBalance: 201.20,
     availableCash: 1.21,
     totalGainLoss: -810.22,
@@ -158,7 +156,6 @@ export const ALTS_ACCOUNT_DATA: AccountData = {
     accountName: 'Alts Account',
     accountNumber: '#82263',
     totalValue: 13972.86,
-    targetValue: 200000, // ~15x Moon Goal
     cashBalance: 4505.33,
     availableCash: 10.94,
     totalGainLoss: -658.00, // Approx from previous context, user didn't specify total PnL
