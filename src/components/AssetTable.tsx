@@ -48,7 +48,7 @@ export default function AssetTable() {
                     </thead>
                     <tbody className="divide-y divide-white/5">
                         {sortedAssets.map((asset) => {
-                            const logoUrl = LOGO_MAPPING[asset.symbol];
+                            const logoUrl = asset.logo || LOGO_MAPPING[asset.symbol];
                             const badge = getStrategyBadge(asset.symbol);
                             const isAnchor = activeAccount === 'sui' && asset.symbol === 'SUI';
                             const showRecycle = canRecycle && asset.symbol !== 'SUI' && asset.symbol !== 'USD' && (asset.gainLoss || 0) > 0;

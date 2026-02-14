@@ -61,6 +61,7 @@ interface PortfolioContextType {
     resetToDefaults: () => void;
     isLiveMode: boolean;
     toggleLiveMode: () => void;
+    importAsset: (symbol: string) => Promise<void>;
     exportData: () => string;
     importData: (json: string) => boolean;
     marketCondition: 'accumulation' | 'bull' | 'bear' | 'distribution' | 'choppiness';
@@ -382,6 +383,49 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
     const toggleLiveMode = useCallback(() => setIsLiveMode(p => !p), []);
 
+    const importAsset = useCallback(async (symbol: string) => {
+        const target = symbol.trim().toUpperCase();
+        console.log(`[SmartFolio] Importing asset: ${target}`);
+
+        let price = 0;
+        let logo = '';
+
+        // 1. Fetch Price (Coinbase)
+        try {
+            const res = await fetch(`https://api.coinbase.com/v2/prices/${target}-USD/spot`);
+            const data = await res.json();
+            if (data?.data?.amount) {
+                price = parseFloat(data.data.amount);
+            }
+        } catch (e) { console.error('Price fetch failed', e); }
+
+        // 2. Fetch Logo (CoinGecko)
+        try {
+            const res = await fetch(`https://api.coingecko.com/api/v3/search?query=${target}`);
+            const data = await res.json();
+            const coin = data.coins?.find((c: any) => c.symbol === target || c.symbol.toUpperCase() === target);
+            if (coin) logo = coin.large || coin.thumb;
+        } catch (e) { console.error('Logo fetch failed', e); }
+
+        // 3. Add to Assets
+        setAssets(prev => {
+            if (prev.some(a => a.symbol === target)) return prev;
+            return [...prev, {
+                symbol: target,
+                name: target,
+                units: 0,
+                avgCost: 0,
+                currentPrice: price,
+                currentValue: 0,
+                totalCost: 0,
+                gainLoss: 0,
+                allocation: 0,
+                targetAllocation: 0, // Manual set later
+                logo: logo || undefined
+            }];
+        });
+    }, []);
+
     const resetToDefaults = useCallback(() => {
         const seed = ACCOUNTS[activeAccount];
         // ... (existing logic)
@@ -440,6 +484,7 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
             resetToDefaults,
             isLiveMode,
             toggleLiveMode,
+            importAsset,
             exportData,
             importData,
             marketCondition,

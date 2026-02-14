@@ -10,7 +10,7 @@ const currency = new Intl.NumberFormat('en-US', { style: 'currency', currency: '
 export default function OrderBuilderPage() {
     const {
         assets, pendingOrders, activeAccount, activeStrategy,
-        addOrder, fillOrder, killOrder, mounted
+        addOrder, fillOrder, killOrder, mounted, importAsset
     } = usePortfolio();
 
     // ─── Manual Workflow Helpers ───
@@ -26,6 +26,10 @@ export default function OrderBuilderPage() {
     const [units, setUnits] = useState('');
     const [price, setPrice] = useState('');
     const [note, setNote] = useState('');
+
+    // Import state
+    const [showImport, setShowImport] = useState(false);
+    const [importSymbol, setImportSymbol] = useState('');
 
     // ─── Ladder builder state ───
     const [ladderMode, setLadderMode] = useState(false);
@@ -120,13 +124,31 @@ export default function OrderBuilderPage() {
             addOrder({
                 type: ladderType,
                 symbol: ladderSymbol,
-                units: step.units,
-                price: parseFloat(step.price.toFixed(4)),
+                units: parseFloat(step.units.toFixed(step.price < 1 ? 2 : 4)), // Fix units precision if needed
+                price: parseFloat(step.price.toFixed(step.price < 1 ? 6 : 4)),
                 note: ladderNote ? `${ladderNote} (rung ${i + 1}/${ladderPreview.length})` : `Ladder ${i + 1}/${ladderPreview.length}`,
             });
         });
         setLadderUnitsEach(''); setLadderPriceStart(''); setLadderPriceEnd(''); setLadderNote('');
     };
+
+    // ─── Auto-Populate Ladder Defaults ───
+    React.useEffect(() => {
+        const tgt = assets.find(a => a.symbol === ladderSymbol);
+        if (tgt && tgt.currentPrice > 0) {
+            const p = tgt.currentPrice;
+            const decimals = p < 1 ? 6 : 2;
+            if (ladderType === 'buy') {
+                // Dip Buy: -5% to -15%
+                setLadderPriceStart((p * 0.95).toFixed(decimals));
+                setLadderPriceEnd((p * 0.85).toFixed(decimals));
+            } else {
+                // Profit Sell: +5% to +20%
+                setLadderPriceStart((p * 1.05).toFixed(decimals));
+                setLadderPriceEnd((p * 1.20).toFixed(decimals));
+            }
+        }
+    }, [ladderSymbol, ladderType, assets]);
 
     if (!mounted || !mounted2) return null;
 
@@ -196,14 +218,54 @@ export default function OrderBuilderPage() {
                             {/* Symbol */}
                             <div className="space-y-1">
                                 <label className="text-[9px] text-gray-600 font-black uppercase tracking-widest">Asset</label>
-                                <select
-                                    value={symbol}
-                                    onChange={e => setSymbol(e.target.value)}
-                                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white font-mono outline-none focus:border-blue-500/50"
-                                >
-                                    <option value="" className="bg-black">Select asset...</option>
-                                    {symbols.map(s => <option key={s} value={s} className="bg-black">{s}</option>)}
-                                </select>
+                                <div className="flex gap-2">
+                                    <select
+                                        value={symbol}
+                                        onChange={e => setSymbol(e.target.value)}
+                                        className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white font-mono outline-none focus:border-blue-500/50"
+                                    >
+                                        <option value="" className="bg-black">Select asset...</option>
+                                        {symbols.map(s => <option key={s} value={s} className="bg-black">{s}</option>)}
+                                    </select>
+                                    <button
+                                        onClick={() => setShowImport(!showImport)}
+                                        className="px-4 bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 text-gray-400 font-bold transition-all text-xl"
+                                        title="Import New Token"
+                                    >
+                                        +
+                                    </button>
+                                </div>
+                                {showImport && (
+                                    <div className="mt-2 bg-blue-500/10 border border-blue-500/20 rounded-xl p-3 flex gap-2 items-center animate-fade-in-up">
+                                        <input
+                                            value={importSymbol}
+                                            onChange={e => setImportSymbol(e.target.value.toUpperCase())}
+                                            placeholder="SYMBOL (e.g. BONK)"
+                                            onKeyDown={async e => {
+                                                if (e.key === 'Enter' && importSymbol) {
+                                                    await importAsset(importSymbol);
+                                                    setSymbol(importSymbol);
+                                                    setShowImport(false);
+                                                    setImportSymbol('');
+                                                }
+                                            }}
+                                            className="flex-1 bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-xs font-mono text-white outline-none focus:border-blue-500/50"
+                                            autoFocus
+                                        />
+                                        <button
+                                            onClick={async () => {
+                                                if (!importSymbol) return;
+                                                await importAsset(importSymbol);
+                                                setSymbol(importSymbol);
+                                                setShowImport(false);
+                                                setImportSymbol('');
+                                            }}
+                                            className="text-[10px] bg-blue-500 text-white px-3 py-2 rounded-lg font-bold hover:bg-blue-600 uppercase tracking-wider"
+                                        >
+                                            Add
+                                        </button>
+                                    </div>
+                                )}
                             </div>
 
                             {/* Units + Price row */}
