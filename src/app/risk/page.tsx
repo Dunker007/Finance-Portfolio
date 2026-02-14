@@ -11,11 +11,12 @@ export default function RiskGuardPage() {
     const [stressPercent, setStressPercent] = useState(-30);
     const [stressSymbol, setStressSymbol] = useState('ALL');
     const [customPrices, setCustomPrices] = useState<Record<string, number>>({});
+    const [simulateFills, setSimulateFills] = useState(false);
     const [mounted2, setMounted2] = useState(false);
 
     useEffect(() => setMounted2(true), []);
     // Reset simulation on account switch
-    useEffect(() => setCustomPrices({}), [activeAccount]);
+    useEffect(() => { setCustomPrices({}); setSimulateFills(false); }, [activeAccount]);
 
     const copyToClipboard = (txt: string | number) => {
         if (!txt) return;
@@ -24,17 +25,58 @@ export default function RiskGuardPage() {
 
     // ─── Simulation Engine ───
     const simulatedData = useMemo(() => {
-        const withValues = assets.map(a => {
+        // 1. Apply Price Overrides
+        let currentAssets = assets.map(a => {
             const price = customPrices[a.symbol] ?? a.currentPrice;
             const val = price * a.units;
             return { ...a, currentPrice: price, currentValue: val, isSimulated: customPrices[a.symbol] !== undefined };
         });
-        const total = withValues.reduce((s, a) => s + a.currentValue, 0);
+
+        // 2. Apply Pending Fills (if enabled)
+        if (simulateFills) {
+            let cash = currentAssets.find(a => a.symbol === 'USD')?.currentValue || 0;
+            const assetMap = new Map(currentAssets.map(a => [a.symbol, a]));
+
+            pendingOrders.forEach(order => {
+                const asset = assetMap.get(order.symbol);
+                const gross = order.units * order.price; // execute at limit price
+                const fee = gross * (TRADE_FEE_PERCENT / 100);
+
+                if (order.type === 'buy') {
+                    // Decrease Cash
+                    cash -= (gross + fee);
+                    // Increase Asset
+                    if (asset) {
+                        const newUnits = asset.units + order.units;
+                        const newVal = newUnits * asset.currentPrice; // value at *current/simulated* price
+                        assetMap.set(order.symbol, { ...asset, units: newUnits, currentValue: newVal });
+                    }
+                } else {
+                    // Sell
+                    // Increase Cash
+                    cash += (gross - fee);
+                    // Decrease Asset
+                    if (asset) {
+                        const newUnits = Math.max(0, asset.units - order.units);
+                        const newVal = newUnits * asset.currentPrice;
+                        assetMap.set(order.symbol, { ...asset, units: newUnits, currentValue: newVal });
+                    }
+                }
+            });
+
+            // Update assets list with modified values
+            currentAssets = Array.from(assetMap.values());
+            // Update Cash asset
+            const cashIndex = currentAssets.findIndex(a => a.symbol === 'USD');
+            if (cashIndex !== -1) currentAssets[cashIndex] = { ...currentAssets[cashIndex], currentValue: cash, units: cash };
+        }
+
+        const total = currentAssets.reduce((s, a) => s + a.currentValue, 0);
         return {
             totalValue: total,
-            assets: withValues.map(a => ({ ...a, allocation: total > 0 ? (a.currentValue / total) * 100 : 0 }))
+            assets: currentAssets.map(a => ({ ...a, allocation: total > 0 ? (a.currentValue / total) * 100 : 0 }))
         };
-    }, [assets, customPrices]);
+    }, [assets, customPrices, simulateFills, pendingOrders, activeAccount]);
 
     const { assets: simulatedAssets, totalValue } = simulatedData;
     const coins = simulatedAssets.filter(a => a.symbol !== 'USD');
@@ -144,11 +186,19 @@ export default function RiskGuardPage() {
                         HHI: {(herfindahl * 10000).toFixed(0)} • Eff. Pos: {effectivePositions.toFixed(1)}
                     </span>
                 </div>
-                {Object.keys(customPrices).length > 0 && (
-                    <button onClick={() => setCustomPrices({})} className="text-[9px] font-black uppercase text-amber-400 bg-amber-500/10 px-3 py-1 rounded-lg border border-amber-500/20 hover:bg-amber-500/20 transition-all">
-                        Reset Simulation
+                <div className="flex items-center gap-3">
+                    <button
+                        onClick={() => setSimulateFills(!simulateFills)}
+                        className={`text-[9px] font-black uppercase px-3 py-1 rounded-lg border transition-all flex items-center gap-2 ${simulateFills ? 'bg-purple-500 text-white border-purple-500 shadow-[0_0_10px_rgba(168,85,247,0.4)]' : 'bg-white/5 text-gray-500 border-white/10 hover:bg-white/10'}`}
+                    >
+                        {simulateFills ? 'Disable Fills' : 'Simulate Fills'}
                     </button>
-                )}
+                    {Object.keys(customPrices).length > 0 && (
+                        <button onClick={() => setCustomPrices({})} className="text-[9px] font-black uppercase text-amber-400 bg-amber-500/10 px-3 py-1 rounded-lg border border-amber-500/20 hover:bg-amber-500/20 transition-all">
+                            Reset Prices
+                        </button>
+                    )}
+                </div>
             </header>
 
             <main className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar">

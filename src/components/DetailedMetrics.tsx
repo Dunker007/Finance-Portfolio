@@ -20,7 +20,8 @@ const Metric = ({
     progress,
     icon,
     onClick,
-    className
+    className,
+    chartData
 }: {
     label: string;
     value: string;
@@ -30,37 +31,74 @@ const Metric = ({
     icon?: string;
     onClick?: () => void;
     className?: string;
-}) => (
-    <div
-        onClick={onClick}
-        className={`flex flex-col justify-between p-4 rounded-xl border border-white/5 bg-gradient-to-br from-white/5 to-transparent hover:from-white/10 transition-all duration-300 relative overflow-hidden group min-h-[100px] ${onClick ? 'cursor-pointer hover:border-white/20 hover:scale-[1.02] active:scale-[0.98]' : ''} ${className || ''}`}
-    >
-        {/* Background Glow */}
-        <div className={`absolute -right-8 -top-8 w-32 h-32 rounded-full blur-3xl opacity-5 group-hover:opacity-10 transition-opacity ${color?.includes('rose') ? 'bg-rose-500' : color?.includes('emerald') ? 'bg-emerald-500' : 'bg-blue-500'}`}></div>
+    chartData?: { v: number }[];
+}) => {
+    // Chart rendering logic
+    let chartSvg = null;
+    if (chartData && chartData.length >= 3) {
+        const h = 50; const w = 120;
+        const max = Math.max(...chartData.map(d => d.v));
+        const min = Math.min(...chartData.map(d => d.v)) * 0.8;
+        const range = max - min;
+        const pts = chartData.map((d, i) => {
+            const x = (i / (chartData.length - 1)) * w;
+            const y = h - ((d.v - min) / range) * h;
+            return `${x},${y}`;
+        }).join(' ');
+        const areaPath = `${pts} ${w},${h} 0,${h}`;
 
-        <div className="flex justify-between items-start z-10 relative">
-            <span className="text-[9px] font-black text-gray-500 uppercase tracking-widest">{label}</span>
-            {icon && <span className="text-xl opacity-20 grayscale group-hover:grayscale-0 transition-all">{icon}</span>}
-        </div>
+        chartSvg = (
+            <svg viewBox={`0 0 ${w} ${h}`} className="absolute bottom-0 right-0 w-full h-full opacity-20 pointer-events-none" preserveAspectRatio="none">
+                <defs>
+                    <linearGradient id="chartGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="currentColor" stopOpacity="0.5" />
+                        <stop offset="100%" stopColor="currentColor" stopOpacity="0" />
+                    </linearGradient>
+                </defs>
+                <path d={`M ${areaPath} Z`} fill="url(#chartGrad)" className={color || 'text-blue-500'} />
+                <polyline points={pts} fill="none" strokeWidth="2" stroke="currentColor" className={color || 'text-white'} vectorEffect="non-scaling-stroke" />
+                {/* Dots */}
+                <circle cx={(0 / 2) * w} cy={h - ((chartData[0].v - min) / range) * h} r="2" fill="currentColor" className="text-gray-500" />
+                <circle cx={(1 / 2) * w} cy={h - ((chartData[1].v - min) / range) * h} r="3" fill="white" />
+                <circle cx={(2 / 2) * w} cy={h - ((chartData[2].v - min) / range) * h} r="2" fill="currentColor" className="text-amber-400" />
+            </svg>
+        );
+    }
 
-        <div className="z-10 relative mt-2">
-            <div className={`text-2xl font-black tracking-tight ${color || 'text-white'}`}>
-                {value}
+    return (
+        <div
+            onClick={onClick}
+            className={`flex flex-col justify-between p-4 rounded-xl border border-white/5 bg-gradient-to-br from-white/5 to-transparent hover:from-white/10 transition-all duration-300 relative overflow-hidden group min-h-[100px] ${onClick ? 'cursor-pointer hover:border-white/20 hover:scale-[1.02] active:scale-[0.98]' : ''} ${className || ''}`}
+        >
+            {/* Background Glow */}
+            <div className={`absolute -right-8 -top-8 w-32 h-32 rounded-full blur-3xl opacity-5 group-hover:opacity-10 transition-opacity ${color?.includes('rose') ? 'bg-rose-500' : color?.includes('emerald') ? 'bg-emerald-500' : 'bg-blue-500'}`}></div>
+
+            {chartSvg}
+
+            <div className="flex justify-between items-start z-10 relative">
+                <span className="text-[9px] font-black text-gray-500 uppercase tracking-widest">{label}</span>
+                {icon && <span className="text-xl opacity-20 grayscale group-hover:grayscale-0 transition-all">{icon}</span>}
             </div>
-            {subValue && <div className="text-[10px] font-mono text-gray-400 mt-0.5">{subValue}</div>}
-        </div>
 
-        {/* Progress Bar */}
-        {progress !== undefined && (
-            <div className="w-full h-1.5 bg-gray-800 rounded-full mt-3 overflow-hidden relative">
-                <div
-                    className={`h-full rounded-full ${color?.replace('text-', 'bg-') || 'bg-blue-500'} shadow-[0_0_10px_currentColor]`}
-                    style={{ width: `${Math.min(progress, 100)}%` }}
-                ></div>
+            <div className="z-10 relative mt-2">
+                <div className={`text-2xl font-black tracking-tight ${color || 'text-white'}`}>
+                    {value}
+                </div>
+                {subValue && <div className="text-[10px] font-mono text-gray-400 mt-0.5">{subValue}</div>}
             </div>
-        )}
-    </div>
-);
+
+            {/* Progress Bar (Only if no chart) */}
+            {progress !== undefined && !chartData && (
+                <div className="w-full h-1.5 bg-gray-800 rounded-full mt-3 overflow-hidden relative">
+                    <div
+                        className={`h-full rounded-full ${color?.replace('text-', 'bg-') || 'bg-blue-500'} shadow-[0_0_10px_currentColor]`}
+                        style={{ width: `${Math.min(progress, 100)}%` }}
+                    ></div>
+                </div>
+            )}
+        </div>
+    );
+};
 
 export default function DetailedMetrics() {
     const { totalValue, assets, activeAccount, setTargetValue, targetValue } = usePortfolio();
@@ -102,6 +140,14 @@ export default function DetailedMetrics() {
     // 4. Cash / Dry Powder
     const cash = assets.find(a => a.symbol === 'USD')?.currentValue || 0;
     const cashAlloc = (cash / totalValue) * 100;
+
+    // Moon Chart Data
+    const totalCost = assets.reduce((s, a) => s + (a.avgCost ? a.avgCost * a.units : a.currentValue), 0);
+    const moonChartData = [
+        { v: totalCost > 0 ? totalCost : totalValue * 0.8 },
+        { v: totalValue },
+        { v: effectiveTarget }
+    ];
 
     // Scenarios
     const SCENARIOS = activeAccount === 'sui' ? [
@@ -156,7 +202,8 @@ export default function DetailedMetrics() {
                     value={currency.format(effectiveTarget)}
                     subValue={`${multipleToGo}x to Goal (Click to Set)`}
                     color={activeAccount === 'sui' ? 'text-amber-400' : 'text-cyan-400'}
-                    progress={moonProgress}
+                    // progress={moonProgress} // Use chart instead
+                    chartData={moonChartData}
                     icon="🚀"
                     onClick={() => setShowTargetModal(true)}
                     className="border-white/20 bg-white/[0.03]"
@@ -180,8 +227,8 @@ export default function DetailedMetrics() {
                                     key={s.label}
                                     onClick={() => { setTargetValue(s.val); setShowTargetModal(false); }}
                                     className={`w-full p-4 rounded-xl border flex items-center justify-between group transition-all ${targetValue === s.val
-                                            ? 'bg-blue-600/20 border-blue-500 ring-1 ring-blue-500/50'
-                                            : 'bg-white/5 border-white/5 hover:bg-white/10 hover:border-white/20'
+                                        ? 'bg-blue-600/20 border-blue-500 ring-1 ring-blue-500/50'
+                                        : 'bg-white/5 border-white/5 hover:bg-white/10 hover:border-white/20'
                                         }`}
                                 >
                                     <div className="text-left">

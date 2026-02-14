@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import { usePortfolio } from '../context/PortfolioContext';
 import { JournalEntry } from '../data/portfolio';
+import { TRADE_FEE_PERCENT } from '../data/strategy';
 
 const currency = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
 
@@ -429,7 +430,20 @@ export default function TradeJournal() {
                                     <span className="text-[9px] text-gray-600 italic">{entry.notes}</span>
                                 </div>
                             </div>
-                            <span className="text-[9px] text-gray-600 font-mono">{formatTime(entry.timestamp)}</span>
+                            <div className="flex flex-col items-end">
+                                <span className={`text-[10px] font-mono font-bold ${entry.type === 'buy' ? 'text-rose-400' :
+                                    entry.type === 'sell' ? 'text-emerald-400' : 'text-gray-400'
+                                    }`}>
+                                    {(() => {
+                                        if (!entry.units || !entry.price) return '—';
+                                        const gross = entry.units * entry.price;
+                                        const fee = gross * (TRADE_FEE_PERCENT / 100);
+                                        const net = entry.type === 'buy' ? -(gross + fee) : (gross - fee);
+                                        return `${net > 0 ? '+' : ''}${currency.format(net)}`;
+                                    })()}
+                                </span>
+                                <span className="text-[8px] text-gray-600 font-mono">{formatTime(entry.timestamp)}</span>
+                            </div>
                         </div>
                     ))
                 )}

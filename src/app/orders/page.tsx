@@ -37,6 +37,18 @@ export default function OrderBuilderPage() {
     const [ladderSteps, setLadderSteps] = useState('3');
     const [ladderNote, setLadderNote] = useState('');
 
+    // ─── Simulation State ───
+    const [simulatedOrderIds, setSimulatedOrderIds] = useState<Set<string>>(new Set());
+
+    const toggleSimulation = (id: string) => {
+        setSimulatedOrderIds(prev => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+        });
+    };
+
     const [mounted2, setMounted2] = useState(false);
     React.useEffect(() => setMounted2(true), []);
 
@@ -73,6 +85,28 @@ export default function OrderBuilderPage() {
             return { price: p, units: unitsEach, gross, fee, net: ladderType === 'sell' ? gross - fee : gross + fee };
         });
     }, [ladderSteps, ladderPriceStart, ladderPriceEnd, ladderUnitsEach, ladderType]);
+
+    // ─── Simulation Metrics ───
+    const simulationMetrics = useMemo(() => {
+        let cashChange = 0;
+        let totalFees = 0;
+
+        allOrders.forEach(order => {
+            if (simulatedOrderIds.has(order.id)) {
+                const gross = order.units * order.price;
+                const fee = gross * (TRADE_FEE_PERCENT / 100);
+                totalFees += fee;
+
+                if (order.type === 'buy') {
+                    cashChange -= (gross + fee);
+                } else {
+                    cashChange += (gross - fee);
+                }
+            }
+        });
+
+        return { cashChange, totalFees };
+    }, [allOrders, simulatedOrderIds]);
 
     const handleSubmitOrder = () => {
         if (!symbol || !previewUnits || !previewPrice) return;
@@ -398,7 +432,14 @@ export default function OrderBuilderPage() {
                 <div className="glass-card p-6 space-y-4">
                     <div className="flex items-center justify-between">
                         <h3 className="text-xs font-black text-gray-400 uppercase tracking-[0.2em]">All Staged Orders</h3>
-                        <span className="text-[9px] text-gray-600 font-mono">{allOrders.length} orders across {new Set(allOrders.map(o => o.account)).size} account(s)</span>
+                        <div className="flex items-center gap-3">
+                            {simulatedOrderIds.size > 0 && (
+                                <span className="text-[10px] font-black text-amber-400 animate-pulse uppercase tracking-widest bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+                                    Simulating {simulatedOrderIds.size} Order(s)
+                                </span>
+                            )}
+                            <span className="text-[9px] text-gray-600 font-mono">{allOrders.length} orders across {new Set(allOrders.map(o => o.account)).size} account(s)</span>
+                        </div>
                     </div>
 
                     {allOrders.length === 0 ? (
@@ -426,8 +467,17 @@ export default function OrderBuilderPage() {
                                         const gross = order.units * order.price;
                                         const fee = gross * (TRADE_FEE_PERCENT / 100);
                                         const isActive = order.account === activeAccount;
+
+                                        // Anomaly Detection
+                                        const currentAsset = assets.find(a => a.symbol === order.symbol);
+                                        const currentPrice = currentAsset?.currentPrice || 0;
+                                        const deviation = currentPrice > 0 ? Math.abs((order.price - currentPrice) / currentPrice) : 0;
+                                        const isAnomaly = deviation > 0.5; // >50% off market
+
+                                        const isSimulated = simulatedOrderIds.has(order.id);
+
                                         return (
-                                            <tr key={order.id} className={`hover:bg-white/[0.03] transition-all ${!isActive ? 'opacity-50' : ''}`}>
+                                            <tr key={order.id} className={`hover:bg-white/[0.03] transition-all ${!isActive ? 'opacity-50' : ''} ${isSimulated ? 'bg-amber-500/5' : ''}`}>
                                                 <td className="p-3 text-[10px] font-mono text-gray-400">{order.account === 'sui' ? '👑 SUI' : '🔄 ALTS'}</td>
                                                 <td className="p-3">
                                                     <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded border ${order.type === 'buy' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border-rose-500/20'}`}>
@@ -447,17 +497,32 @@ export default function OrderBuilderPage() {
                                                         {order.units.toLocaleString()}
                                                     </button>
                                                 </td>
-                                                <td className="p-3 text-right text-xs font-mono text-blue-400">
-                                                    <button onClick={() => copyToClipboard(order.price)} className="hover:text-white transition-colors border-b border-transparent hover:border-blue-400" title="Copy Price">
-                                                        {currency.format(order.price)}
-                                                    </button>
+                                                <td className="p-3 text-right text-xs font-mono relative group">
+                                                    <div className={`flex items-center justify-end gap-1 ${isAnomaly ? 'text-amber-400' : 'text-blue-400'}`}>
+                                                        {isAnomaly && <span className="text-[10px]">⚠️</span>}
+                                                        <button onClick={() => copyToClipboard(order.price)} className="hover:text-white transition-colors border-b border-transparent hover:border-blue-400" title="Copy Price">
+                                                            {currency.format(order.price)}
+                                                        </button>
+                                                    </div>
+                                                    {isAnomaly && (
+                                                        <div className="absolute right-0 top-8 bg-black/90 border border-amber-500/30 p-2 rounded-lg text-[9px] text-amber-200 z-50 whitespace-nowrap hidden group-hover:block">
+                                                            Suspicious Price! Market is {currency.format(currentPrice)}<br />
+                                                            Deviation: {(deviation * 100).toFixed(0)}%
+                                                        </div>
+                                                    )}
                                                 </td>
                                                 <td className="p-3 text-right text-xs font-mono text-white">{currency.format(gross)}</td>
                                                 <td className="p-3 text-right text-xs font-mono text-amber-400">{currency.format(fee)}</td>
                                                 <td className="p-3 text-[10px] text-gray-500 max-w-[200px] truncate italic">{order.note || '—'}</td>
-                                                <td className="p-3 text-right">
+                                                <td className="p-3 text-right flex justify-end gap-2">
+                                                    <button
+                                                        onClick={() => toggleSimulation(order.id)}
+                                                        className={`px-2 py-1 rounded-lg text-[8px] font-black uppercase transition-all border ${isSimulated ? 'bg-amber-500 text-black border-amber-500' : 'bg-white/5 text-gray-500 border-white/10 hover:bg-white/10'}`}
+                                                    >
+                                                        {isSimulated ? 'Simulating' : 'Sim'}
+                                                    </button>
                                                     {isActive && (
-                                                        <div className="flex items-center gap-1.5 justify-end">
+                                                        <div className="flex items-center gap-1.5 border-l border-white/10 pl-2 ml-2">
                                                             <button onClick={() => fillOrder(order.id)}
                                                                 className="px-2 py-1 rounded-lg bg-blue-500/10 hover:bg-blue-500 text-blue-400 hover:text-white text-[8px] font-black uppercase transition-all border border-blue-500/20"
                                                             >Fill</button>
@@ -475,10 +540,33 @@ export default function OrderBuilderPage() {
                         </div>
                     )}
 
-                    {/* Fee summary */}
-                    <div className="flex items-center justify-between p-3 rounded-xl bg-white/[0.02] border border-white/5 text-[9px] font-mono">
-                        <span className="text-gray-500">Total staged value: <span className="text-white font-bold">{currency.format(allOrders.reduce((s, o) => s + o.units * o.price, 0))}</span></span>
-                        <span className="text-amber-400">Total fee drag: {currency.format(allOrders.reduce((s, o) => s + o.units * o.price * TRADE_FEE_PERCENT / 100, 0))}</span>
+                    {/* Fee summary & Simulation Result */}
+                    <div className="space-y-2">
+                        <div className="flex items-center justify-between p-3 rounded-xl bg-white/[0.02] border border-white/5 text-[9px] font-mono">
+                            <span className="text-gray-500">Total staged value: <span className="text-white font-bold">{currency.format(allOrders.reduce((s, o) => s + o.units * o.price, 0))}</span></span>
+                            <span className="text-amber-400">Total fee drag: {currency.format(allOrders.reduce((s, o) => s + o.units * o.price * TRADE_FEE_PERCENT / 100, 0))}</span>
+                        </div>
+
+                        {simulatedOrderIds.size > 0 && (
+                            <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs font-mono space-y-2 animate-fade-in-up">
+                                <h4 className="font-black text-amber-400 uppercase tracking-widest flex items-center gap-2">
+                                    <span>⚡ Simulated Impact</span>
+                                    <button onClick={() => setSimulatedOrderIds(new Set())} className="text-[9px] text-gray-400 hover:text-white underline">Clear</button>
+                                </h4>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <p className="text-gray-500 text-[10px]">Net Cash Change</p>
+                                        <p className={`font-bold ${simulationMetrics.cashChange >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                            {simulationMetrics.cashChange >= 0 ? '+' : ''}{currency.format(simulationMetrics.cashChange)}
+                                        </p>
+                                    </div>
+                                    <div>
+                                        <p className="text-gray-500 text-[10px]">Total Fees</p>
+                                        <p className="text-amber-400 font-bold">-{currency.format(simulationMetrics.totalFees)}</p>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </div>
             </main>
