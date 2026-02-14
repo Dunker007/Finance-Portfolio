@@ -1,9 +1,8 @@
 "use client";
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { usePortfolio } from '@/context/PortfolioContext';
 import { ACCOUNTS, AccountId, LOGO_MAPPING } from '@/data/portfolio';
 import { TRADE_FEE_PERCENT } from '@/data/strategy';
-
 
 const currency = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
 
@@ -11,57 +10,124 @@ export default function RiskGuardPage() {
     const { assets, activeAccount, activeStrategy, pendingOrders, mounted } = usePortfolio();
     const [stressPercent, setStressPercent] = useState(-30);
     const [stressSymbol, setStressSymbol] = useState('ALL');
+    const [customPrices, setCustomPrices] = useState<Record<string, number>>({});
     const [mounted2, setMounted2] = useState(false);
-    React.useEffect(() => setMounted2(true), []);
 
-    const totalValue = assets.reduce((s, a) => s + a.currentValue, 0);
-    const coins = assets.filter(a => a.symbol !== 'USD');
-    const cashAsset = assets.find(a => a.symbol === 'USD');
+    useEffect(() => setMounted2(true), []);
+    // Reset simulation on account switch
+    useEffect(() => setCustomPrices({}), [activeAccount]);
 
-    // ─── Stress Test ───
+    const copyToClipboard = (txt: string | number) => {
+        if (!txt) return;
+        navigator.clipboard.writeText(String(txt));
+    };
+
+    // ─── Simulation Engine ───
+    const simulatedData = useMemo(() => {
+        const withValues = assets.map(a => {
+            const price = customPrices[a.symbol] ?? a.currentPrice;
+            const val = price * a.units;
+            return { ...a, currentPrice: price, currentValue: val, isSimulated: customPrices[a.symbol] !== undefined };
+        });
+        const total = withValues.reduce((s, a) => s + a.currentValue, 0);
+        return {
+            totalValue: total,
+            assets: withValues.map(a => ({ ...a, allocation: total > 0 ? (a.currentValue / total) * 100 : 0 }))
+        };
+    }, [assets, customPrices]);
+
+    const { assets: simulatedAssets, totalValue } = simulatedData;
+    const coins = simulatedAssets.filter(a => a.symbol !== 'USD');
+    const cashAsset = simulatedAssets.find(a => a.symbol === 'USD');
+
+    // ─── Rebalance Logic (Smart) ───
+    const rebalanceSuggestions = useMemo(() => {
+        return coins.map(a => {
+            const range = activeStrategy.targets[a.symbol.toLowerCase() as 'sui' | 'alts'] || activeStrategy.targets.alts; // fallback
+            // Note: Strategy targets are complex, simplified here to use asset-level targetAllocation which comes from portfolio.ts
+            // We use the asset's targetAllocation as the source of truth for the dashboard to match the bar charts.
+
+            const targetValue = totalValue * (a.targetAllocation / 100);
+            const diff = targetValue - a.currentValue; // Positive = Buy, Negative = Sell
+            const absDiff = Math.abs(diff);
+            const neededChange = diff; // $ amount
+
+            // Pending Order Awareness
+            const pendingBuys = pendingOrders.filter(o => o.symbol === a.symbol && o.type === 'buy');
+            const pendingSells = pendingOrders.filter(o => o.symbol === a.symbol && o.type === 'sell');
+            const pendingBuyVal = pendingBuys.reduce((s, o) => s + (o.units * o.price), 0);
+            const pendingSellVal = pendingSells.reduce((s, o) => s + (o.units * o.price), 0);
+
+            let action = 'HOLD';
+            let status = ' actionable';
+            let remainingVal = absDiff;
+            let coverMsg = '';
+
+            // Thresholds ($10 noise filter due to simulation)
+            if (diff < -10) {
+                action = 'TRIM';
+                if (pendingSellVal >= absDiff * 0.9) {
+                    status = 'COVERED';
+                    const coveringOrder = pendingSells.sort((a, b) => b.price - a.price)[0]; // highest sell
+                    coverMsg = `Covered by pending sell (${coveringOrder?.units.toFixed(0)} @ ${coveringOrder?.price})`;
+                } else if (pendingSellVal > 0) {
+                    status = 'PARTIAL';
+                    remainingVal = absDiff - pendingSellVal;
+                    coverMsg = `Partially covered ($${pendingSellVal.toFixed(0)} pending)`;
+                }
+            } else if (diff > 10) {
+                action = 'ADD';
+                if (pendingBuyVal >= absDiff * 0.9) {
+                    status = 'COVERED';
+                    const coveringOrder = pendingBuys.sort((a, b) => a.price - b.price)[0]; // lowest buy
+                    coverMsg = `Covered by pending buy (${coveringOrder?.units.toFixed(0)} @ ${coveringOrder?.price})`;
+                } else if (pendingBuyVal > 0) {
+                    status = 'PARTIAL';
+                    remainingVal = absDiff - pendingBuyVal;
+                    coverMsg = `Partially covered ($${pendingBuyVal.toFixed(0)} pending)`;
+                }
+            }
+
+            return {
+                ...a, targetValue, diff, absDiff, neededChange, action, status, remainingVal, coverMsg,
+                tradeUnitsApprox: Math.abs(remainingVal / a.currentPrice)
+            };
+        }).filter(a => a.action !== 'HOLD').sort((a, b) => b.absDiff - a.absDiff);
+    }, [coins, totalValue, pendingOrders, activeStrategy]);
+
+
+    // ─── Stress Test Logic ───
     const stressResults = useMemo(() => {
         const pct = stressPercent / 100;
-        return assets.map(a => {
+        return simulatedAssets.map(a => {
             if (a.symbol === 'USD') return { ...a, stressedValue: a.currentValue, delta: 0, stressedAlloc: 0 };
             const applies = stressSymbol === 'ALL' || stressSymbol === a.symbol;
             const stressedValue = applies ? a.currentValue * (1 + pct) : a.currentValue;
             const delta = stressedValue - a.currentValue;
             return { ...a, stressedValue, delta, stressedAlloc: 0 };
         });
-    }, [assets, stressPercent, stressSymbol]);
+    }, [simulatedAssets, stressPercent, stressSymbol]);
 
     const stressedTotal = stressResults.reduce((s, a) => s + a.stressedValue, 0);
     const stressedWithAlloc = stressResults.map(a => ({ ...a, stressedAlloc: (a.stressedValue / stressedTotal) * 100 }));
     const totalDelta = stressedTotal - totalValue;
 
-    // ─── Concentration analysis ───
+    // ─── Concentration & Drawdown ───
     const sortedByAlloc = [...coins].sort((a, b) => b.allocation - a.allocation);
     const herfindahl = coins.reduce((s, a) => s + Math.pow(a.allocation / 100, 2), 0);
-    const effectivePositions = 1 / herfindahl;
+    const effectivePositions = 1 / (herfindahl || 1);
 
-    // ─── Drawdown from cost basis ───
     const drawdowns = coins.map(a => {
         const costBasis = a.avgCost || a.currentPrice;
         const drawdownPct = ((a.currentPrice - costBasis) / costBasis) * 100;
         return { ...a, drawdownPct, costBasis };
     }).sort((a, b) => a.drawdownPct - b.drawdownPct);
 
-    // ─── Rebalance suggestions ───
-    const rebalanceSuggestions = coins.map(a => {
-        const deviation = a.allocation - a.targetAllocation;
-        const targetValue = (a.targetAllocation / 100) * totalValue;
-        const neededChange = targetValue - a.currentValue;
-        const action = deviation > 3 ? 'TRIM' : deviation < -3 ? 'ADD' : 'HOLD';
-        return { ...a, deviation, targetValue, neededChange, action };
-    }).filter(a => a.action !== 'HOLD').sort((a, b) => Math.abs(b.deviation) - Math.abs(a.deviation));
-
-    // ─── Cross-account risk ───
+    // ─── Cross-account Risk ───
     const otherAccountId: AccountId = activeAccount === 'sui' ? 'alts' : 'sui';
     const otherAssets = ACCOUNTS[otherAccountId].assets;
     const otherTotal = otherAssets.reduce((s, a) => s + a.currentValue, 0);
     const combinedTotal = totalValue + otherTotal;
-
-    // Find overlapping symbols
     const activeSymbols = new Set(coins.map(a => a.symbol));
     const otherSymbols = new Set(otherAssets.filter(a => a.symbol !== 'USD').map(a => a.symbol));
     const overlapping = [...activeSymbols].filter(s => otherSymbols.has(s));
@@ -74,15 +140,112 @@ export default function RiskGuardPage() {
                 <div className="flex items-center gap-3">
                     <span className="text-lg">🛡️</span>
                     <h1 className="text-sm font-black text-white uppercase tracking-widest">Risk Guard</h1>
-                </div>
-                <div className="flex items-center gap-4">
                     <span className="text-[9px] text-gray-500 font-mono bg-white/5 px-2 py-0.5 rounded border border-white/10">
-                        HHI: {(herfindahl * 10000).toFixed(0)} • Effective Positions: {effectivePositions.toFixed(1)}
+                        HHI: {(herfindahl * 10000).toFixed(0)} • Eff. Pos: {effectivePositions.toFixed(1)}
                     </span>
                 </div>
+                {Object.keys(customPrices).length > 0 && (
+                    <button onClick={() => setCustomPrices({})} className="text-[9px] font-black uppercase text-amber-400 bg-amber-500/10 px-3 py-1 rounded-lg border border-amber-500/20 hover:bg-amber-500/20 transition-all">
+                        Reset Simulation
+                    </button>
+                )}
             </header>
 
             <main className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar">
+
+                {/* ═══ SCENARIO SIMULATOR ═══ */}
+                <div className="glass-card p-6 space-y-4 relative overflow-hidden">
+                    <div className="absolute top-0 right-0 p-4 opacity-10 text-6xl">🔮</div>
+                    <h3 className="text-xs font-black text-gray-400 uppercase tracking-[0.2em]">Scenario Simulator</h3>
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                        {coins.map(a => (
+                            <div key={a.symbol} className="space-y-1">
+                                <div className="flex justify-between items-center text-[9px]">
+                                    <span className="text-gray-500 font-bold">{a.symbol} Price</span>
+                                    {a.isSimulated && <span className="text-amber-400">Modified</span>}
+                                </div>
+                                <input
+                                    type="number"
+                                    value={a.currentPrice}
+                                    onChange={(e) => setCustomPrices(prev => ({ ...prev, [a.symbol]: parseFloat(e.target.value) || 0 }))}
+                                    step="0.0001"
+                                    className={`w-full bg-white/5 border rounded-lg px-2 py-1.5 text-xs font-mono outline-none focus:border-blue-500/50 ${a.isSimulated ? 'border-amber-500/30 text-amber-300' : 'border-white/10 text-white'}`}
+                                />
+                            </div>
+                        ))}
+                    </div>
+                </div>
+
+                {/* ═══ STRATEGY REBALANCER ═══ */}
+                {rebalanceSuggestions.length > 0 && (
+                    <div className="glass-card p-6 space-y-4">
+                        <div className="flex items-center justify-between">
+                            <h3 className="text-xs font-black text-gray-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                                Strategy Rebalancer
+                                <span className="bg-blue-500/20 text-blue-400 px-1.5 rounded text-[9px]">Fee Aware</span>
+                            </h3>
+                            <span className="text-[9px] text-gray-600 font-mono">Based on target allocations</span>
+                        </div>
+
+                        <div className="space-y-3">
+                            {rebalanceSuggestions.map(a => {
+                                const isTrim = a.action === 'TRIM';
+                                const isCovered = a.status === 'COVERED';
+                                const colorClass = isTrim ? 'rose' : 'emerald';
+
+                                return (
+                                    <div key={a.symbol} className={`p-4 rounded-xl border transition-all ${isTrim ? 'bg-rose-500/5 border-rose-500/20' : 'bg-emerald-500/5 border-emerald-500/20'} ${isCovered ? 'opacity-60 grayscale-[0.5]' : ''}`}>
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-3">
+                                                <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-[10px] font-black ${isTrim ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'}`}>
+                                                    {isCovered ? '✓' : (isTrim ? '↓' : '↑')}
+                                                </div>
+                                                <div className="flex flex-col">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-sm font-black text-white">{a.symbol}</span>
+                                                        <span className={`text-[8px] font-black uppercase px-1.5 py-0.5 rounded border ${isTrim ? 'bg-rose-500/10 text-rose-400 border-rose-500/20' : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'}`}>
+                                                            {a.action}
+                                                        </span>
+                                                        {a.status !== 'actionable' && (
+                                                            <span className="text-[8px] font-bold text-gray-400 uppercase bg-white/5 px-1.5 rounded">
+                                                                {a.status}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    <span className="text-[9px] text-gray-500 font-mono">
+                                                        {a.allocation.toFixed(1)}% → {a.targetAllocation.toFixed(1)}% target
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            <div className="text-right flex flex-col items-end">
+                                                {!isCovered ? (
+                                                    <>
+                                                        <div className="flex items-center gap-2">
+                                                            <button
+                                                                onClick={() => copyToClipboard(a.tradeUnitsApprox.toFixed(a.currentPrice < 1 ? 0 : 4))}
+                                                                className={`text-sm font-black font-mono hover:underline ${isTrim ? 'text-rose-400' : 'text-emerald-400'}`}
+                                                                title="Click to copy units"
+                                                            >
+                                                                {isTrim ? 'Sell' : 'Buy'} {a.tradeUnitsApprox.toLocaleString(undefined, { maximumFractionDigits: 4 })}
+                                                            </button>
+                                                        </div>
+                                                        <span className="text-[9px] text-gray-500 font-mono">
+                                                            ≈ {currency.format(a.remainingVal)}
+                                                            <span className="text-amber-500/70 ml-1">(fee: {currency.format(a.remainingVal * TRADE_FEE_PERCENT / 100)})</span>
+                                                        </span>
+                                                    </>
+                                                ) : (
+                                                    <span className="text-[10px] font-mono text-emerald-400">{a.coverMsg}</span>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                )}
+
                 {/* ═══ STRESS TEST ═══ */}
                 <div className="glass-card p-6 space-y-5">
                     <div className="flex items-center justify-between">
@@ -100,22 +263,20 @@ export default function RiskGuardPage() {
                             <div className="flex items-center gap-2">
                                 {[-50, -30, -20, -10, 10, 20, 50].map(pct => (
                                     <button key={pct} onClick={() => setStressPercent(pct)}
-                                        className={`px-2 py-1 rounded-lg text-[9px] font-bold transition-all border ${stressPercent === pct ? 'bg-blue-500 text-white border-blue-500' : 'bg-white/5 text-gray-500 border-white/10 hover:bg-white/10'
-                                            }`}
+                                        className={`px-2 py-1 rounded-lg text-[9px] font-bold transition-all border ${stressPercent === pct ? 'bg-blue-500 text-white border-blue-500' : 'bg-white/5 text-gray-500 border-white/10 hover:bg-white/10'}`}
                                     >{pct > 0 ? '+' : ''}{pct}%</button>
                                 ))}
                             </div>
                         </div>
                     </div>
 
-                    {/* Stress impact header */}
                     <div className="grid grid-cols-3 gap-4">
                         <div className="p-4 rounded-xl bg-white/[0.02] border border-white/5">
-                            <span className="text-[9px] text-gray-600 uppercase tracking-widest">Current Portfolio</span>
+                            <span className="text-[9px] text-gray-600 uppercase tracking-widest">Base Value</span>
                             <div className="text-lg font-black font-mono text-white">{currency.format(totalValue)}</div>
                         </div>
                         <div className="p-4 rounded-xl bg-white/[0.02] border border-white/5">
-                            <span className="text-[9px] text-gray-600 uppercase tracking-widest">After {stressPercent > 0 ? '+' : ''}{stressPercent}% Scenario</span>
+                            <span className="text-[9px] text-gray-600 uppercase tracking-widest">Post-Stress</span>
                             <div className={`text-lg font-black font-mono ${totalDelta >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{currency.format(stressedTotal)}</div>
                         </div>
                         <div className="p-4 rounded-xl bg-white/[0.02] border border-white/5">
@@ -126,8 +287,7 @@ export default function RiskGuardPage() {
                         </div>
                     </div>
 
-                    {/* Per-asset stress */}
-                    <div className="space-y-2">
+                    <div className="space-y-2 max-h-60 overflow-y-auto custom-scrollbar">
                         {stressedWithAlloc.filter(a => a.symbol !== 'USD').map(a => (
                             <div key={a.symbol} className="flex items-center gap-4 p-3 rounded-xl bg-white/[0.01] border border-white/5">
                                 <div className="flex items-center gap-2 w-24">
@@ -186,10 +346,9 @@ export default function RiskGuardPage() {
                                 );
                             })}
                         </div>
-
                         {overlapping.length > 0 && (
                             <div className="p-3 rounded-xl bg-amber-500/5 border border-amber-500/20 text-[9px] text-amber-400">
-                                ⚠️ Cross-account overlap: <span className="font-bold">{overlapping.join(', ')}</span> — held in both SUI and Alts accounts
+                                ⚠️ Cross-account overlap: <span className="font-bold">{overlapping.join(', ')}</span> — held in both accounts
                             </div>
                         )}
                     </div>
@@ -206,13 +365,9 @@ export default function RiskGuardPage() {
                                     </div>
                                     <div className="flex-1 h-3 bg-white/5 rounded-full overflow-hidden relative">
                                         {a.drawdownPct >= 0 ? (
-                                            <div className="h-full bg-emerald-500/60 rounded-full transition-all"
-                                                style={{ width: `${Math.min(Math.abs(a.drawdownPct), 100)}%` }}
-                                            ></div>
+                                            <div className="h-full bg-emerald-500/60 rounded-full transition-all" style={{ width: `${Math.min(Math.abs(a.drawdownPct), 100)}%` }}></div>
                                         ) : (
-                                            <div className="h-full bg-rose-500/60 rounded-full transition-all"
-                                                style={{ width: `${Math.min(Math.abs(a.drawdownPct), 100)}%` }}
-                                            ></div>
+                                            <div className="h-full bg-rose-500/60 rounded-full transition-all" style={{ width: `${Math.min(Math.abs(a.drawdownPct), 100)}%` }}></div>
                                         )}
                                     </div>
                                     <span className={`text-xs font-mono font-bold w-16 text-right ${a.drawdownPct >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
@@ -225,51 +380,7 @@ export default function RiskGuardPage() {
                     </div>
                 </div>
 
-                {/* ═══ REBALANCE SUGGESTIONS ═══ */}
-                {rebalanceSuggestions.length > 0 && (
-                    <div className="glass-card p-6 space-y-4">
-                        <h3 className="text-xs font-black text-gray-400 uppercase tracking-[0.2em]">Rebalance Suggestions</h3>
-                        <div className="space-y-3">
-                            {rebalanceSuggestions.map(a => {
-                                const isTrim = a.action === 'TRIM';
-                                return (
-                                    <div key={a.symbol} className={`p-4 rounded-xl border ${isTrim ? 'bg-rose-500/5 border-rose-500/20' : 'bg-emerald-500/5 border-emerald-500/20'}`}>
-                                        <div className="flex items-center justify-between">
-                                            <div className="flex items-center gap-3">
-                                                <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-[10px] font-black ${isTrim ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'}`}>
-                                                    {isTrim ? '↓' : '↑'}
-                                                </div>
-                                                <div className="flex flex-col">
-                                                    <div className="flex items-center gap-2">
-                                                        {LOGO_MAPPING[a.symbol] && <img src={LOGO_MAPPING[a.symbol]} alt="" className="w-4 h-4" />}
-                                                        <span className="text-sm font-black text-white">{a.symbol}</span>
-                                                        <span className={`text-[8px] font-black uppercase px-1.5 py-0.5 rounded border ${isTrim ? 'bg-rose-500/10 text-rose-400 border-rose-500/20' : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'}`}>
-                                                            {a.action}
-                                                        </span>
-                                                    </div>
-                                                    <span className="text-[9px] text-gray-500 font-mono">
-                                                        {a.allocation.toFixed(1)}% → {a.targetAllocation.toFixed(1)}% target
-                                                        {' '}({a.deviation > 0 ? '+' : ''}{a.deviation.toFixed(1)}% deviation)
-                                                    </span>
-                                                </div>
-                                            </div>
-                                            <div className="text-right">
-                                                <span className={`text-sm font-black font-mono ${isTrim ? 'text-rose-400' : 'text-emerald-400'}`}>
-                                                    {isTrim ? 'Sell' : 'Buy'} ~{currency.format(Math.abs(a.neededChange))}
-                                                </span>
-                                                <div className="text-[9px] text-amber-400 font-mono">
-                                                    fee: ~{currency.format(Math.abs(a.neededChange) * TRADE_FEE_PERCENT / 100)}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    </div>
-                )}
-
-                {/* ═══ CROSS-ACCOUNT EXPOSURE ═══ */}
+                {/* ═══ CROSS-ACCOUNT SUMMARY ═══ */}
                 <div className="glass-card p-6 space-y-4">
                     <h3 className="text-xs font-black text-gray-400 uppercase tracking-[0.2em]">Cross-Account Risk Summary</h3>
                     <div className="grid grid-cols-3 gap-4">

@@ -99,26 +99,65 @@ export default function ReportPage() {
     // ─── Trade recommendations ───
     const recommendations = useMemo(() => {
         const recs: { icon: string; text: string; priority: 'high' | 'medium' | 'low' }[] = [];
+        const cashTargets = activeStrategy.targets.cash;
+        const cashMin = cashTargets.min || 10;
+        const cashIdeal = cashTargets.ideal || 25;
 
-        if (cashPercent < 10) {
-            recs.push({ icon: '🚨', text: `Cash critically low at ${cashPercent.toFixed(1)}%. Sell positions to rebuild dry powder.`, priority: 'high' });
-        } else if (cashPercent < 15) {
-            recs.push({ icon: '⚠️', text: `Cash at ${cashPercent.toFixed(1)}% — below ideal. Monitor for opportunities to take profit.`, priority: 'medium' });
+        // Dynamic Cash Checks
+        if (cashPercent < cashMin) {
+            recs.push({ icon: '🚨', text: `Cash critically low at ${cashPercent.toFixed(1)}% (Min: ${cashMin}%). Sell positions to rebuild dry powder.`, priority: 'high' });
+        } else if (cashPercent < cashIdeal * 0.9) {
+            recs.push({ icon: '⚠️', text: `Cash at ${cashPercent.toFixed(1)}% — below ideal ${cashIdeal}%. Monitor for opportunities to take profit.`, priority: 'medium' });
         }
 
         coins.forEach(a => {
             const roi = a.totalCost ? ((a.gainLoss || 0) / a.totalCost) * 100 : 0;
-            if (roi > 50) recs.push({ icon: '💰', text: `${a.symbol} is +${roi.toFixed(0)}% ROI. Consider taking 25-50% profit.`, priority: 'medium' });
-            if (roi < -30) recs.push({ icon: '📉', text: `${a.symbol} is ${roi.toFixed(0)}% ROI. Evaluate thesis — hold or cut losses.`, priority: 'medium' });
-            if (a.allocation > a.targetAllocation + 10) recs.push({ icon: '⚖️', text: `${a.symbol} at ${a.allocation.toFixed(1)}% — significantly overweight (target: ${a.targetAllocation.toFixed(1)}%). Trim.`, priority: 'high' });
+            const deviation = a.allocation - a.targetAllocation;
+
+            // Pending Order Awareness
+            const pendingBuys = pendingOrders.filter(o => o.symbol === a.symbol && o.type === 'buy');
+            const pendingSells = pendingOrders.filter(o => o.symbol === a.symbol && o.type === 'sell');
+            const hasPendingSell = pendingSells.length > 0;
+            const hasPendingBuy = pendingBuys.length > 0;
+
+            // Profit taking
+            if (roi > 50) {
+                if (hasPendingSell) {
+                    recs.push({ icon: '✅', text: `${a.symbol} is +${roi.toFixed(0)}% ROI. Profit-taking order already staged.`, priority: 'low' });
+                } else {
+                    recs.push({ icon: '💰', text: `${a.symbol} is +${roi.toFixed(0)}% ROI. Consider taking 25-50% profit.`, priority: 'medium' });
+                }
+            } else if (roi < -30) {
+                recs.push({ icon: '📉', text: `${a.symbol} is ${roi.toFixed(0)}% ROI. Evaluate thesis — hold or cut losses.`, priority: 'medium' });
+            }
+
+            // Rebalancing
+            if (deviation > 5) { // Significantly Overweight
+                if (hasPendingSell) {
+                    recs.push({ icon: '✅', text: `${a.symbol} overweight (${a.allocation.toFixed(1)}%). Trim order staged.`, priority: 'low' });
+                } else {
+                    recs.push({ icon: '⚖️', text: `${a.symbol} at ${a.allocation.toFixed(1)}% — overweight (target: ${a.targetAllocation.toFixed(1)}%). Trim suggested.`, priority: 'high' });
+                }
+            } else if (deviation < -5) { // Significantly Underweight
+                if (hasPendingBuy) {
+                    recs.push({ icon: '✅', text: `${a.symbol} underweight. Buy order staged.`, priority: 'low' });
+                } else {
+                    // Only suggest buying if cash allows
+                    if (cashPercent > cashMin) {
+                        recs.push({ icon: '🛒', text: `${a.symbol} underweight (${a.allocation.toFixed(1)}%). Consider adding on dips.`, priority: 'medium' });
+                    }
+                }
+            }
         });
 
-        if (pendingOrders.length === 0) {
-            recs.push({ icon: '📋', text: 'No pending orders. Use the Order Builder to stage entries or exits.', priority: 'low' });
+        if (recs.length === 0) {
+            recs.push({ icon: '✨', text: 'Portfolio is balanced and strategy compliant. No actions needed.', priority: 'low' });
+        } else if (pendingOrders.length === 0 && recs.some(r => r.priority === 'high')) {
+            recs.push({ icon: '📋', text: 'High priority items detected. Use Order Builder to stage actions.', priority: 'high' });
         }
 
         return recs;
-    }, [assets, cashPercent, coins, pendingOrders]);
+    }, [assets, cashPercent, coins, pendingOrders, activeStrategy]);
 
     if (!mounted || !mounted2) return null;
 

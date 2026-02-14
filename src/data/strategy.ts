@@ -42,17 +42,17 @@ export const SUI_STRATEGY: Strategy = {
 
     targets: {
         sui: { min: 40, ideal: 50, max: 85, label: 'Core / King' },
-        alts: { min: 0, ideal: 25, max: 35, label: 'Tactical Swings' },
+        alts: { min: 0, ideal: 25, max: 35, label: 'Tactical Swings (2-3 max)' },
         cash: { min: 10, ideal: 25, max: 40, label: 'USDC Dry Powder' },
     },
 
     rules: [
         'SUI is the anchor — never below ~40-45% without strong reason; compound over years.',
-        'Alts are tactical swings ONLY — enter on dips, take 20-50% profits, recycle to SUI/cash.',
-        'Cash at 25% is the safety net — low cash is priority #1 to rebuild.',
-        'Trim SUI on strength (pumps), not weakness — ladder exits at key resistance.',
-        'Recycle alt profits → SUI accumulation or cash reserve rebuild.',
-        'No FOMO market buys — patience and limit orders only.',
+        'Alts are tactical swings ONLY (2-3 max) — enter on dips, take 20-50% profits.',
+        'Cash target is ~25% — build this up by trimming SUI on pumps (like the 1.05 wall).',
+        'Execution: Swing 2-3 alts (e.g. LINK/AAVE/IMX), trim on strength.',
+        'Risk: 1% trade fee apply — avoid churning, make moves count.',
+        'Tax Status: Roth IRA = Tax-free gains, leverage this for compounding.',
     ],
 
     thresholds: {
@@ -71,30 +71,30 @@ export const SUI_STRATEGY: Strategy = {
 export const ALTS_STRATEGY: Strategy = {
     name: 'Balanced Alt Rotation — No King',
     accountLabel: 'Alts Account (#82263)',
-    targetMask: '60-80:20-40 (ALTS/USD)',
+    targetMask: '60-80% Alts : 20-40% Cash',
 
     targets: {
-        alts: { min: 50, ideal: 70, max: 80, label: 'Diversified Alts' },
+        alts: { min: 60, ideal: 70, max: 80, label: 'Diversified Alts (5+)' },
         cash: { min: 20, ideal: 30, max: 40, label: 'USDC Dry Powder' },
     },
 
     rules: [
-        'No single king — balance risk across 4-8 alt positions evenly.',
+        'No single king — balance risk across 5+ alt positions (e.g. ONDO/RENDER/FET/UNI/HYPE).',
         'No alt should exceed ~20% of portfolio — rebalance on over-concentration.',
-        'Cash at 20-40% is the safety net — 32% is healthy, stay in range.',
-        'Swing trade dips → take profits at 30-100%+ moves → recycle to cash or new dips.',
-        'Ladder buys (deep dip + closer dip) and profit-target sells on every position.',
-        '1% trade fee — batch or ladder wisely, avoid churning small moves.',
-        'All inside Roth = tax-free compounding. No rush, patience pays.',
+        'Cash target 20-40% (Ideal ~30-32%) — healthy dry powder for dips.',
+        'Strategy: Swing trade dips → take profits at 30-100%+ moves.',
+        'Recycle gains back into cash or new dips.',
+        'Risk: Spot only, no leverage. Monitor 1% fees on frequent trades.',
+        'Roth perks: All swings tax-free inside — perfect for active alt plays.',
     ],
 
     thresholds: {
         profitTakeMin: 30,
         profitTakeMax: 100,
         dipEntryPercent: 15,
-        cashCriticalBelow: 15,
-        cashHealthyAbove: 25,
-        maxConcentration: 20,
+        cashCriticalBelow: 20, // stricter for conservative account
+        cashHealthyAbove: 30,
+        maxConcentration: 22, // Strict ~20% limit per asset
     },
 };
 

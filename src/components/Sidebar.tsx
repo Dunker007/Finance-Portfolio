@@ -1,6 +1,6 @@
 "use client";
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useState } from 'react';
 
 import { usePortfolio } from '../context/PortfolioContext';
@@ -10,6 +10,7 @@ const currency = new Intl.NumberFormat('en-US', { style: 'currency', currency: '
 
 const Sidebar = () => {
     const pathname = usePathname();
+    const router = useRouter();
     const { assets, activeAccount, switchAccount, activeStrategy } = usePortfolio();
     const [isOpen, setIsOpen] = useState(false);
 
@@ -82,7 +83,11 @@ const Sidebar = () => {
                             return (
                                 <button
                                     key={id}
-                                    onClick={() => { switchAccount(id); setIsOpen(false); }}
+                                    onClick={() => {
+                                        switchAccount(id);
+                                        setIsOpen(false);
+                                        if (pathname === '/aum') router.push('/');
+                                    }}
                                     className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl transition-all text-left ${isActive
                                         ? 'bg-blue-500/10 border border-blue-500/30 shadow-[0_0_10px_rgba(59,130,246,0.15)]'
                                         : 'bg-white/[0.02] border border-white/5 hover:bg-white/[0.05] hover:border-white/10'

@@ -13,6 +13,13 @@ export default function OrderBuilderPage() {
         addOrder, fillOrder, killOrder, mounted
     } = usePortfolio();
 
+    // ─── Manual Workflow Helpers ───
+    const copyToClipboard = (txt: string | number) => {
+        if (!txt) return;
+        navigator.clipboard.writeText(String(txt));
+        // Could add toast here but simple is fine
+    };
+
     // ─── Order form state ───
     const [orderType, setOrderType] = useState<'buy' | 'sell'>('buy');
     const [symbol, setSymbol] = useState('');
@@ -230,7 +237,7 @@ export default function OrderBuilderPage() {
                                 <div className="space-y-4">
                                     <div className="p-4 rounded-xl bg-white/[0.02] border border-white/5 space-y-3">
                                         <PreviewRow label="Gross Value" value={currency.format(previewGross)} />
-                                        <PreviewRow label={`Fee (${TRADE_FEE_PERCENT}%)`} value={`-${currency.format(previewFee)}`} color="text-amber-400" />
+                                        <PreviewRow label={`Est. Fee (${TRADE_FEE_PERCENT}%)`} value={`-${currency.format(previewFee)}`} color="text-amber-400" />
                                         <div className="border-t border-white/5 pt-2">
                                             <PreviewRow
                                                 label={orderType === 'buy' ? 'Total Cost' : 'Net Proceeds'}
@@ -238,6 +245,14 @@ export default function OrderBuilderPage() {
                                                 color="text-white"
                                                 bold
                                             />
+                                        </div>
+                                        <div className="border-t border-white/5 pt-2">
+                                            <PreviewRow
+                                                label="Break-even Price"
+                                                value={currency.format(orderType === 'buy' ? previewPrice * 1.0203 : previewPrice * 0.9798)}
+                                                color="text-purple-400"
+                                            />
+                                            <span className="text-[9px] text-gray-600 italic block text-right mt-1">Covering 1% buy + 1% sell</span>
                                         </div>
                                     </div>
 
@@ -345,7 +360,15 @@ export default function OrderBuilderPage() {
                                                         {i + 1}
                                                     </div>
                                                     <div className="flex flex-col">
-                                                        <span className="text-xs font-mono font-bold text-white">{step.units} units @ {currency.format(step.price)}</span>
+                                                        <div className="flex items-center gap-2">
+                                                            <button onClick={() => copyToClipboard(step.units)} className="text-xs font-mono font-bold text-white hover:text-blue-400" title="Copy Units">
+                                                                {step.units} units
+                                                            </button>
+                                                            <span className="text-gray-600">@</span>
+                                                            <button onClick={() => copyToClipboard(step.price)} className="text-xs font-mono font-bold text-white hover:text-blue-400" title="Copy Price">
+                                                                {currency.format(step.price)}
+                                                            </button>
+                                                        </div>
                                                         <span className="text-[9px] text-gray-600 font-mono">Gross: {currency.format(step.gross)} • Fee: {currency.format(step.fee)}</span>
                                                     </div>
                                                 </div>
@@ -419,8 +442,16 @@ export default function OrderBuilderPage() {
                                                         <span className="text-xs font-black text-white">{order.symbol}</span>
                                                     </div>
                                                 </td>
-                                                <td className="p-3 text-right text-xs font-mono text-gray-300">{order.units.toLocaleString()}</td>
-                                                <td className="p-3 text-right text-xs font-mono text-blue-400">{currency.format(order.price)}</td>
+                                                <td className="p-3 text-right text-xs font-mono text-gray-300">
+                                                    <button onClick={() => copyToClipboard(order.units)} className="hover:text-white transition-colors border-b border-transparent hover:border-gray-500" title="Copy Units">
+                                                        {order.units.toLocaleString()}
+                                                    </button>
+                                                </td>
+                                                <td className="p-3 text-right text-xs font-mono text-blue-400">
+                                                    <button onClick={() => copyToClipboard(order.price)} className="hover:text-white transition-colors border-b border-transparent hover:border-blue-400" title="Copy Price">
+                                                        {currency.format(order.price)}
+                                                    </button>
+                                                </td>
                                                 <td className="p-3 text-right text-xs font-mono text-white">{currency.format(gross)}</td>
                                                 <td className="p-3 text-right text-xs font-mono text-amber-400">{currency.format(fee)}</td>
                                                 <td className="p-3 text-[10px] text-gray-500 max-w-[200px] truncate italic">{order.note || '—'}</td>
