@@ -69,49 +69,63 @@ const Sidebar = () => {
                 {/* ═══ Account Switcher ═══ */}
                 <div className="px-4 pb-4 space-y-1.5">
                     <span className="text-[9px] text-gray-600 font-black uppercase tracking-[0.2em] px-2">Accounts</span>
-                    {(Object.keys(ACCOUNTS) as AccountId[]).map(id => {
-                        const acct = ACCOUNTS[id];
-                        const isActive = id === activeAccount;
-                        return (
-                            <button
-                                key={id}
-                                onClick={() => { switchAccount(id); setIsOpen(false); }}
-                                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl transition-all text-left ${isActive
-                                    ? 'bg-blue-500/10 border border-blue-500/30 shadow-[0_0_10px_rgba(59,130,246,0.15)]'
-                                    : 'bg-white/[0.02] border border-white/5 hover:bg-white/[0.05] hover:border-white/10'
-                                    }`}
-                            >
-                                <div className="flex items-center gap-2.5">
-                                    <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-[9px] font-black ${isActive ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' : 'bg-white/5 text-gray-500 border border-white/10'
-                                        }`}>
-                                        {id === 'sui' ? '👑' : '🔄'}
+                    {(Object.keys(ACCOUNTS) as AccountId[])
+                        .sort((a, b) => {
+                            const valA = a === activeAccount ? totalValue : otherAccountValue;
+                            const valB = b === activeAccount ? totalValue : otherAccountValue;
+                            return valB - valA;
+                        })
+                        .map(id => {
+                            const acct = ACCOUNTS[id];
+                            const isActive = id === activeAccount;
+                            const acctValue = isActive ? totalValue : otherAccountValue;
+                            return (
+                                <button
+                                    key={id}
+                                    onClick={() => { switchAccount(id); setIsOpen(false); }}
+                                    className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl transition-all text-left ${isActive
+                                        ? 'bg-blue-500/10 border border-blue-500/30 shadow-[0_0_10px_rgba(59,130,246,0.15)]'
+                                        : 'bg-white/[0.02] border border-white/5 hover:bg-white/[0.05] hover:border-white/10'
+                                        }`}
+                                >
+                                    <div className="flex items-center gap-2.5">
+                                        <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-[9px] font-black ${isActive ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' : 'bg-white/5 text-gray-500 border border-white/10'
+                                            }`}>
+                                            {id === 'sui' ? '👑' : '🔄'}
+                                        </div>
+                                        <div className="flex flex-col">
+                                            <span className={`text-[11px] font-black ${isActive ? 'text-white' : 'text-gray-400'}`}>
+                                                {acct.accountName}
+                                            </span>
+                                            <span className="text-[9px] text-gray-600 font-mono">{acct.accountNumber}</span>
+                                        </div>
                                     </div>
-                                    <div className="flex flex-col">
-                                        <span className={`text-[11px] font-black ${isActive ? 'text-white' : 'text-gray-400'}`}>
-                                            {acct.accountName}
-                                        </span>
-                                        <span className="text-[9px] text-gray-600 font-mono">{acct.accountNumber}</span>
+                                    <div className="flex items-center gap-1.5">
+                                        <span className={`text-[10px] font-black font-mono ${isActive ? 'text-white' : 'text-gray-500'}`}>{currency.format(acctValue)}</span>
+                                        {isActive && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>}
                                     </div>
-                                </div>
-                                <div className="flex items-center gap-1.5">
-                                    {isActive && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>}
-                                </div>
-                            </button>
-                        );
-                    })}
-                </div>
+                                </button>
+                            );
+                        })}
 
-                {/* Combined AUM */}
-                <div className="px-4 pb-3">
-                    <div className="p-3 rounded-xl bg-white/[0.02] border border-white/5">
-                        <span className="text-[9px] text-gray-600 font-black uppercase tracking-[0.2em]">Combined AUM</span>
-                        <div className="text-lg font-black font-mono text-white mt-0.5">{currency.format(combinedAUM)}</div>
-                        <div className="flex items-center gap-3 mt-1">
-                            <span className="text-[9px] text-gray-500 font-mono">SUI: {currency.format(activeAccount === 'sui' ? totalValue : otherAccountValue)}</span>
-                            <span className="text-[9px] text-gray-600">•</span>
-                            <span className="text-[9px] text-gray-500 font-mono">Alts: {currency.format(activeAccount === 'alts' ? totalValue : otherAccountValue)}</span>
+                    {/* Combined AUM — same card style */}
+                    <Link href="/aum" onClick={() => setIsOpen(false)}
+                        className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl transition-all ${pathname === '/aum'
+                            ? 'bg-purple-500/10 border border-purple-500/30 shadow-[0_0_10px_rgba(168,85,247,0.15)]'
+                            : 'bg-white/[0.02] border border-white/5 hover:bg-white/[0.05] hover:border-white/10'
+                            }`}
+                    >
+                        <div className="flex items-center gap-2.5">
+                            <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-[9px] font-black ${pathname === '/aum' ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30' : 'bg-white/5 text-gray-500 border border-white/10'}`}>
+                                💰
+                            </div>
+                            <div className="flex flex-col">
+                                <span className={`text-[11px] font-black ${pathname === '/aum' ? 'text-white' : 'text-gray-400'}`}>Combined AUM</span>
+                                <span className="text-[9px] text-gray-600 font-mono">2 Roth IRAs</span>
+                            </div>
                         </div>
-                    </div>
+                        <span className={`text-[10px] font-black font-mono ${pathname === '/aum' ? 'text-purple-400' : 'text-blue-400'}`}>{currency.format(combinedAUM)}</span>
+                    </Link>
                 </div>
 
                 {/* Nav */}
