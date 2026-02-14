@@ -2,6 +2,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { ACCOUNTS, AccountId, Asset, Order, AccountData, JournalEntry } from '../data/portfolio';
 import { STRATEGIES, Strategy, TRADE_FEE_PERCENT } from '../data/strategy';
+import { startPolling, stopPolling, fetchPrices, type PriceMap } from '../lib/priceEngine';
 
 // ─── localStorage helpers ───
 const STORAGE_PREFIX = 'smartfolio_';
@@ -61,6 +62,8 @@ interface PortfolioContextType {
     resetToDefaults: () => void;
     isLiveMode: boolean;
     toggleLiveMode: () => void;
+    lastSync: Date | null;
+    refreshPrices: () => Promise<void>;
     importAsset: (symbol: string) => Promise<void>;
     exportData: () => string;
     importData: (json: string) => boolean;
@@ -160,40 +163,65 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         saveToStorage(`${STORAGE_PREFIX}activeAccount`, id);
     }, [activeAccount, assets, pendingOrders, recycledToSui, journal, targetValue]);
 
-    // ─── Market Simulation & Live Mode ───
+    // ─── Live Price Engine ───
     const [isLiveMode, setIsLiveMode] = useState(false);
+    const [lastSync, setLastSync] = useState<Date | null>(null);
 
-    // Auto-Reload (60s) if Live Mode is active
-    useEffect(() => {
-        if (!isLiveMode) return;
-        const interval = setInterval(() => {
-            if (typeof window !== 'undefined') window.location.reload();
-        }, 60000); // 60s
-        return () => clearInterval(interval);
-    }, [isLiveMode]);
-
-    useEffect(() => {
-        const interval = setInterval(() => {
-            setAssets(prev => {
-                const updated = prev.map(asset => {
-                    if (asset.symbol === 'USD') return asset;
-                    const volatility = 0.0008;
-                    const change = 1 + (Math.random() * volatility * 2 - volatility);
-                    const newPrice = asset.currentPrice * change;
-                    const newValue = asset.units * newPrice;
-                    return {
-                        ...asset,
-                        currentPrice: newPrice,
-                        currentValue: newValue,
-                        gainLoss: newValue - (asset.totalCost || 0),
-                    };
-                });
-                const freshTotal = updated.reduce((s, a) => s + a.currentValue, 0);
-                return updated.map(a => ({ ...a, allocation: (a.currentValue / freshTotal) * 100 }));
+    // Apply price updates from Coinbase
+    const applyPrices = useCallback((prices: PriceMap) => {
+        setAssets(prev => {
+            const updated = prev.map(asset => {
+                if (asset.symbol === 'USD') return asset;
+                const newPrice = prices[asset.symbol];
+                if (newPrice === undefined) return asset; // No price for this symbol
+                const newValue = asset.units * newPrice;
+                return {
+                    ...asset,
+                    currentPrice: newPrice,
+                    currentValue: newValue,
+                    gainLoss: newValue - (asset.totalCost || 0),
+                };
             });
-        }, 5000);
-        return () => clearInterval(interval);
-    }, [activeAccount]); // restart sim on account switch
+            const freshTotal = updated.reduce((s, a) => s + a.currentValue, 0);
+            return updated.map(a => ({ ...a, allocation: (a.currentValue / freshTotal) * 100 }));
+        });
+    }, []);
+
+    // Manual refresh
+    const refreshPrices = useCallback(async () => {
+        const symbols = assets.filter(a => a.symbol !== 'USD').map(a => a.symbol);
+        const prices = await fetchPrices(symbols);
+        if (Object.keys(prices).length > 0) {
+            applyPrices(prices);
+            setLastSync(new Date());
+        }
+    }, [assets, applyPrices]);
+
+    // Fetch live prices on mount (one-shot)
+    useEffect(() => {
+        if (!mounted) return;
+        const symbols = assets.filter(a => a.symbol !== 'USD').map(a => a.symbol);
+        fetchPrices(symbols).then(prices => {
+            if (Object.keys(prices).length > 0) {
+                applyPrices(prices);
+                setLastSync(new Date());
+            }
+        });
+    }, [mounted, activeAccount]); // Re-fetch on mount and account switch
+
+    // Live Mode: continuous polling every 30s
+    useEffect(() => {
+        if (!isLiveMode || !mounted) return;
+        const symbols = assets.filter(a => a.symbol !== 'USD').map(a => a.symbol);
+        const cleanup = startPolling({
+            symbols,
+            intervalMs: 30000, // 30 seconds
+            onPriceUpdate: applyPrices,
+            onSyncComplete: (ts) => setLastSync(ts),
+            onError: (err) => console.warn('[PriceEngine]', err.message),
+        });
+        return cleanup;
+    }, [isLiveMode, mounted, activeAccount, applyPrices]);
 
     // ─── Actions ───
 
@@ -484,6 +512,8 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
             resetToDefaults,
             isLiveMode,
             toggleLiveMode,
+            lastSync,
+            refreshPrices,
             importAsset,
             exportData,
             importData,

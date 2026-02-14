@@ -12,8 +12,8 @@ import { TAX_WRAPPER } from '@/data/strategy';
 
 export default function Home() {
   const [mounted, setMounted] = React.useState(false);
-  const [syncTime, setSyncTime] = React.useState("");
-  const { assets, activeAccount, activeStrategy, isLiveMode, toggleLiveMode } = usePortfolio();
+  const { assets, activeAccount, activeStrategy, isLiveMode, toggleLiveMode, lastSync, refreshPrices } = usePortfolio();
+  const [isRefreshing, setIsRefreshing] = React.useState(false);
 
   // Dynamic anchor metric
   const anchorLabel = activeAccount === 'sui' ? 'Anchor Weight' : 'Cash Buffer';
@@ -23,10 +23,14 @@ export default function Home() {
 
   React.useEffect(() => {
     setMounted(true);
-    setSyncTime(new Date().toLocaleTimeString());
-    // "Scroll into place" -> Reset scroll on load/refresh
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, []);
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    await refreshPrices();
+    setIsRefreshing(false);
+  };
 
   return (
     <>
@@ -41,17 +45,26 @@ export default function Home() {
           <button
             onClick={toggleLiveMode}
             className={`text-[10px] font-mono px-2 py-0.5 rounded border transition-all uppercase tracking-wider ${isLiveMode
-              ? 'text-rose-400 bg-rose-500/10 border-rose-500/20 animate-pulse font-bold'
+              ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20 font-bold'
               : 'text-amber-400 bg-amber-500/10 border-amber-500/20'
               }`}
           >
-            {isLiveMode ? 'LIVE SYNC (60s)' : 'MANUAL MODE'}
+            <span className={`inline-block w-1.5 h-1.5 rounded-full mr-1.5 ${isLiveMode ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`}></span>
+            {isLiveMode ? 'LIVE (30s)' : 'MANUAL'}
+          </button>
+          <button
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+            className={`text-[10px] font-mono px-2 py-0.5 rounded border border-white/10 bg-white/5 text-gray-400 hover:text-white hover:bg-white/10 transition-all uppercase tracking-wider ${isRefreshing ? 'animate-spin' : ''}`}
+            title="Refresh prices from Coinbase"
+          >
+            🔄
           </button>
           <div className="h-4 w-px bg-white/10 mx-2"></div>
           <span className="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">{TAX_WRAPPER}</span>
           <div className="h-4 w-px bg-white/10 mx-2"></div>
           <span className="text-[10px] font-mono text-gray-500 tracking-tighter lowercase opacity-50">
-            last_sync: {mounted ? syncTime : "--:--:--"}
+            {mounted && lastSync ? `coinbase_sync: ${lastSync.toLocaleTimeString()}` : 'sync: pending...'}
           </span>
         </div>
 
