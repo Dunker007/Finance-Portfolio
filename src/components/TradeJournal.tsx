@@ -4,10 +4,9 @@ import { usePortfolio, JournalEntry } from '../context/PortfolioContext';
 
 const currency = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
 
-const SYMBOLS = ['SUI', 'LINK', 'AAVE', 'IMX', 'USD'];
-
 export default function TradeJournal() {
-    const { journal, addJournalEntry, exportData, importData, resetToDefaults } = usePortfolio();
+    const { journal, addJournalEntry, exportData, importData, resetToDefaults, assets } = usePortfolio();
+    const SYMBOLS = assets.map(a => a.symbol);
     const [isOpen, setIsOpen] = useState(false);
     const [showSettings, setShowSettings] = useState(false);
 
@@ -188,8 +187,8 @@ export default function TradeJournal() {
                         <div key={entry.id} className="flex items-center justify-between p-3 rounded-xl bg-white/[0.02] border border-white/5 hover:bg-white/[0.04] transition-all group">
                             <div className="flex items-center gap-3">
                                 <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-[10px] font-black text-white ${entry.type === 'buy' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                                        : entry.type === 'sell' ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
-                                            : 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
+                                    : entry.type === 'sell' ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
+                                        : 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
                                     }`}>
                                     {entry.type === 'buy' ? 'B' : entry.type === 'sell' ? 'S' : '📝'}
                                 </div>

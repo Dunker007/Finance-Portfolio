@@ -1,7 +1,7 @@
 "use client";
 import React from 'react';
 import { usePortfolio } from '../context/PortfolioContext';
-import { STRATEGY, getCashHealth } from '../data/strategy';
+import { getCashHealth } from '../data/strategy';
 
 const currency = new Intl.NumberFormat('en-US', {
     style: 'currency',
@@ -9,25 +9,19 @@ const currency = new Intl.NumberFormat('en-US', {
     minimumFractionDigits: 2
 });
 
-const easyFormat = (num: number, digits = 4) => num.toLocaleString('en-US', { maximumFractionDigits: digits, minimumFractionDigits: 2 });
-
 const fmtPercent = (n: number) => n.toFixed(2) + '%';
 
-const Metric = ({ label, value, color, icon, trend, chart }: { label: string; value: string | number; color?: string; icon?: React.ReactNode; trend?: string; chart?: React.ReactNode }) => (
+const Metric = ({ label, value, color, trend, chart }: { label: string; value: string | number; color?: string; trend?: string; chart?: React.ReactNode }) => (
     <div className="flex flex-col gap-1 p-5 rounded-xl border border-white/5 bg-gradient-to-br from-white/10 to-transparent hover:from-white/15 transition-all duration-300 relative overflow-hidden group">
-        {/* Background Glow */}
         <div className={`absolute -right-6 -top-6 w-24 h-24 rounded-full blur-2xl opacity-10 group-hover:opacity-20 transition-opacity ${color?.includes('green') ? 'bg-green-500' : color?.includes('red') ? 'bg-red-500' : 'bg-blue-500'}`}></div>
-
         <span className="text-gray-400 text-[10px] uppercase tracking-widest font-semibold flex justify-between items-center z-10">
             {label}
-            {trend && <span className={`text-[10px] ${trend.startsWith('+') ? 'text-green-400' : 'text-red-400'}`}>{trend}</span>}
+            {trend && <span className={`text-[10px] ${trend.startsWith('+') ? 'text-green-400' : trend.startsWith('⚠') ? 'text-rose-400' : 'text-gray-400'}`}>{trend}</span>}
         </span>
         <div className="flex items-end justify-between z-10">
             <span className={`text-2xl font-mono font-bold tracking-tight ${color || 'text-white'}`}>{value}</span>
             {chart}
         </div>
-
-        {/* Micro Chart Line (Simulated) */}
         {!chart && (
             <div className="h-1 w-full bg-white/5 mt-2 rounded overflow-hidden">
                 <div className={`h-full w-2/3 ${color?.includes('red') ? 'bg-red-500' : 'bg-emerald-500'} opacity-50`}></div>
@@ -39,7 +33,7 @@ const Metric = ({ label, value, color, icon, trend, chart }: { label: string; va
 const Sparkline = ({ data, color }: { data: number[], color: string }) => {
     const min = Math.min(...data);
     const max = Math.max(...data);
-    const range = max - min;
+    const range = max - min || 1;
     const width = 100;
     const height = 20;
     const points = data.map((d, i) => ({
@@ -63,20 +57,68 @@ const Sparkline = ({ data, color }: { data: number[], color: string }) => {
 };
 
 export default function DetailedMetrics() {
-    const { totalValue, cashBalance, assets, recycledToSui, marketTrends } = usePortfolio();
+    const { totalValue, cashBalance, assets, recycledToSui, activeAccount, activeStrategy } = usePortfolio();
 
-    // Calculate total gain/loss from assets minus their cost basis
     const totalGainLoss = assets.reduce((sum: number, a) => sum + (a.gainLoss || 0), 0);
-
-    const suiAsset = assets.find(a => a.symbol === 'SUI');
     const pnlColor = totalGainLoss >= 0 ? 'text-emerald-400' : 'text-rose-400';
     const percentChange = ((totalGainLoss / (totalValue - totalGainLoss)) * 100).toFixed(2);
     const trendSign = Number(percentChange) >= 0 ? '+' : '';
 
-    const cashTarget = STRATEGY.targets.cash.ideal;
+    const cashTarget = activeStrategy.targets.cash.ideal;
     const currentCashPercent = (cashBalance / totalValue) * 100;
     const cashGap = cashTarget - currentCashPercent;
-    const cashStatus = getCashHealth(currentCashPercent);
+    const cashStatus = getCashHealth(currentCashPercent, activeStrategy);
+
+    // Third metric is account-specific
+    const renderAnchorMetric = () => {
+        if (activeAccount === 'sui') {
+            const suiAsset = assets.find(a => a.symbol === 'SUI');
+            return (
+                <Metric
+                    label="SUI King Dominance"
+                    value={fmtPercent(suiAsset?.allocation || 0)}
+                    color="text-blue-400"
+                    trend="ANCHOR STABLE"
+                />
+            );
+        } else {
+            // Alts account: show number of positions and largest position
+            const altAssets = assets.filter(a => a.symbol !== 'USD');
+            const largest = altAssets.reduce((max, a) => a.allocation > (max?.allocation || 0) ? a : max, altAssets[0]);
+            return (
+                <Metric
+                    label="Position Balance"
+                    value={`${altAssets.length} Coins`}
+                    color="text-blue-400"
+                    trend={`Largest: ${largest?.symbol} @ ${fmtPercent(largest?.allocation || 0)}`}
+                />
+            );
+        }
+    };
+
+    // Fourth metric: account-specific
+    const renderRecycleMetric = () => {
+        if (activeAccount === 'sui') {
+            return (
+                <Metric
+                    label="Recycled Alpha (Alts → SUI)"
+                    value={currency.format(recycledToSui)}
+                    color="text-purple-400"
+                    trend="COMPOUNDING EFFECT"
+                />
+            );
+        } else {
+            const pendingBuyValue = 0; // calculated from context if needed
+            return (
+                <Metric
+                    label="Available Cash"
+                    value={currency.format(cashBalance)}
+                    color="text-purple-400"
+                    trend={`${currentCashPercent.toFixed(0)}% of portfolio`}
+                />
+            );
+        }
+    };
 
     return (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
@@ -84,7 +126,6 @@ export default function DetailedMetrics() {
                 label="Aggregate Portfolio Value"
                 value={currency.format(totalValue)}
                 color="text-white"
-                trend="+3.4% (Spot Recovery)"
                 chart={<Sparkline data={[totalValue - 100, totalValue - 50, totalValue - 80, totalValue - 20, totalValue]} color="green" />}
             />
             <Metric
@@ -92,24 +133,10 @@ export default function DetailedMetrics() {
                 value={currency.format(totalGainLoss)}
                 color={pnlColor}
                 trend={`${trendSign}${percentChange}% ROI`}
-                chart={<Sparkline data={[-900, -880, -850, -820, -810]} color="green" />}
             />
 
-            <Metric
-                label="SUI King Dominance"
-                value={fmtPercent(suiAsset?.allocation || 0)}
-                color="text-blue-400"
-                trend="ANCHOR STABLE"
-                chart={<Sparkline data={marketTrends.SUI} color="green" />}
-            />
-
-            <Metric
-                label="Recycled Alpha (Alts → SUI)"
-                value={currency.format(recycledToSui)}
-                color="text-purple-400"
-                trend="COMPOUNDING EFFECT"
-                chart={<Sparkline data={[100, 200, 350, 420, 450]} color="green" />}
-            />
+            {renderAnchorMetric()}
+            {renderRecycleMetric()}
 
             <Metric
                 label="Cash Reserve Gap"

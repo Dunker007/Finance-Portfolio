@@ -1,48 +1,15 @@
 "use client";
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
-import { PORTFOLIO_DATA, Asset, Order } from '../data/portfolio';
+import { ACCOUNTS, AccountId, Asset, Order, AccountData } from '../data/portfolio';
+import { STRATEGIES, Strategy } from '../data/strategy';
 
-// ─── localStorage Keys ───
-const STORAGE_KEYS = {
-    assets: 'smartfolio_assets',
-    orders: 'smartfolio_orders',
-    recycled: 'smartfolio_recycled',
-    journal: 'smartfolio_journal',
-} as const;
+// ─── localStorage helpers ───
+const STORAGE_PREFIX = 'smartfolio_';
 
-// ─── Journal Entry Type ───
-export interface JournalEntry {
-    id: string;
-    timestamp: string;
-    symbol: string;
-    type: 'buy' | 'sell' | 'note';
-    price?: number;
-    units?: number;
-    notes: string;
+function storageKey(accountId: AccountId, key: string) {
+    return `${STORAGE_PREFIX}${accountId}_${key}`;
 }
 
-// ─── Context Interface ───
-interface PortfolioContextType {
-    totalValue: number;
-    cashBalance: number;
-    assets: Asset[];
-    pendingOrders: Order[];
-    recycledToSui: number;
-    marketTrends: Record<string, number[]>;
-    journal: JournalEntry[];
-    mounted: boolean;
-    recyclePnL: (symbol: string) => void;
-    fillOrder: (orderId: string) => void;
-    killOrder: (orderId: string) => void;
-    addJournalEntry: (entry: Omit<JournalEntry, 'id' | 'timestamp'>) => void;
-    resetToDefaults: () => void;
-    exportData: () => string;
-    importData: (json: string) => boolean;
-}
-
-const PortfolioContext = createContext<PortfolioContextType | undefined>(undefined);
-
-// ─── Safe localStorage helpers ───
 function loadFromStorage<T>(key: string, fallback: T): T {
     if (typeof window === 'undefined') return fallback;
     try {
@@ -57,69 +24,142 @@ function saveToStorage(key: string, value: unknown) {
     if (typeof window === 'undefined') return;
     try {
         localStorage.setItem(key, JSON.stringify(value));
-    } catch { /* quota exceeded — fail silently */ }
+    } catch { /* quota exceeded */ }
 }
 
-// ─── Provider ───
+// ─── Journal Entry ───
+export interface JournalEntry {
+    id: string;
+    timestamp: string;
+    symbol: string;
+    type: 'buy' | 'sell' | 'note';
+    price?: number;
+    units?: number;
+    notes: string;
+}
+
+// ─── Context Interface ───
+interface PortfolioContextType {
+    // Account
+    activeAccount: AccountId;
+    activeStrategy: Strategy;
+    accountData: AccountData;
+    switchAccount: (id: AccountId) => void;
+
+    // State
+    totalValue: number;
+    cashBalance: number;
+    assets: Asset[];
+    pendingOrders: Order[];
+    recycledToSui: number;
+    marketTrends: Record<string, number[]>;
+    journal: JournalEntry[];
+    mounted: boolean;
+
+    // Actions
+    recyclePnL: (symbol: string) => void;
+    fillOrder: (orderId: string) => void;
+    killOrder: (orderId: string) => void;
+    addJournalEntry: (entry: Omit<JournalEntry, 'id' | 'timestamp'>) => void;
+    resetToDefaults: () => void;
+    exportData: () => string;
+    importData: (json: string) => boolean;
+}
+
+const PortfolioContext = createContext<PortfolioContextType | undefined>(undefined);
+
+// ─── Load account state from localStorage or seed ───
+function loadAccountState(accountId: AccountId) {
+    const seed = ACCOUNTS[accountId];
+    return {
+        assets: loadFromStorage<Asset[]>(storageKey(accountId, 'assets'), seed.assets),
+        pendingOrders: loadFromStorage<Order[]>(storageKey(accountId, 'orders'), seed.pendingOrders),
+        recycledToSui: loadFromStorage<number>(storageKey(accountId, 'recycled'), seed.recycledToSui || 0),
+        journal: loadFromStorage<JournalEntry[]>(storageKey(accountId, 'journal'), []),
+    };
+}
+
+// ─── Save account state to localStorage ───
+function saveAccountState(accountId: AccountId, state: {
+    assets: Asset[];
+    pendingOrders: Order[];
+    recycledToSui: number;
+    journal: JournalEntry[];
+}) {
+    saveToStorage(storageKey(accountId, 'assets'), state.assets);
+    saveToStorage(storageKey(accountId, 'orders'), state.pendingOrders);
+    saveToStorage(storageKey(accountId, 'recycled'), state.recycledToSui);
+    saveToStorage(storageKey(accountId, 'journal'), state.journal);
+}
+
+// ═══════════════════════════════════════════════════
+// PROVIDER
+// ═══════════════════════════════════════════════════
 export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [mounted, setMounted] = useState(false);
-    const [assets, setAssets] = useState<Asset[]>(PORTFOLIO_DATA.assets);
-    const [pendingOrders, setPendingOrders] = useState<Order[]>(PORTFOLIO_DATA.pendingOrders);
-    const [recycledToSui, setRecycledToSui] = useState(PORTFOLIO_DATA.recycledToSui || 0);
-    const [marketTrends] = useState(PORTFOLIO_DATA.marketTrends);
+    const [activeAccount, setActiveAccount] = useState<AccountId>('sui');
+    const [assets, setAssets] = useState<Asset[]>(ACCOUNTS.sui.assets);
+    const [pendingOrders, setPendingOrders] = useState<Order[]>(ACCOUNTS.sui.pendingOrders);
+    const [recycledToSui, setRecycledToSui] = useState(ACCOUNTS.sui.recycledToSui || 0);
+    const [marketTrends] = useState(ACCOUNTS.sui.marketTrends);
     const [journal, setJournal] = useState<JournalEntry[]>([]);
 
-    // Hydration: load from localStorage ONCE on mount
+    const activeStrategy = STRATEGIES[activeAccount];
+    const accountData = ACCOUNTS[activeAccount];
+
+    // Hydration: load from localStorage on mount
     useEffect(() => {
-        setAssets(loadFromStorage(STORAGE_KEYS.assets, PORTFOLIO_DATA.assets));
-        setPendingOrders(loadFromStorage(STORAGE_KEYS.orders, PORTFOLIO_DATA.pendingOrders));
-        setRecycledToSui(loadFromStorage(STORAGE_KEYS.recycled, PORTFOLIO_DATA.recycledToSui || 0));
-        setJournal(loadFromStorage(STORAGE_KEYS.journal, []));
+        const savedAccount = loadFromStorage<AccountId>(`${STORAGE_PREFIX}activeAccount`, 'sui');
+        const state = loadAccountState(savedAccount);
+        setActiveAccount(savedAccount);
+        setAssets(state.assets);
+        setPendingOrders(state.pendingOrders);
+        setRecycledToSui(state.recycledToSui);
+        setJournal(state.journal);
         setMounted(true);
     }, []);
 
-    // Persist on state changes (skip initial render before hydration)
+    // Persist on state changes (skip before hydration)
     const hasHydrated = useRef(false);
     useEffect(() => {
         if (!mounted) return;
         if (!hasHydrated.current) { hasHydrated.current = true; return; }
-        saveToStorage(STORAGE_KEYS.assets, assets);
-    }, [assets, mounted]);
+        saveAccountState(activeAccount, { assets, pendingOrders, recycledToSui, journal });
+    }, [assets, pendingOrders, recycledToSui, journal, mounted, activeAccount]);
 
-    useEffect(() => {
-        if (!mounted) return;
-        if (!hasHydrated.current) return;
-        saveToStorage(STORAGE_KEYS.orders, pendingOrders);
-    }, [pendingOrders, mounted]);
-
-    useEffect(() => {
-        if (!mounted) return;
-        if (!hasHydrated.current) return;
-        saveToStorage(STORAGE_KEYS.recycled, recycledToSui);
-    }, [recycledToSui, mounted]);
-
-    useEffect(() => {
-        if (!mounted) return;
-        if (!hasHydrated.current) return;
-        saveToStorage(STORAGE_KEYS.journal, journal);
-    }, [journal, mounted]);
-
-    // Dynamic Derived Values
+    // Derived values
     const cashBalance = assets.find(a => a.symbol === 'USD')?.currentValue || 0;
     const totalValue = assets.reduce((sum, a) => sum + a.currentValue, 0);
 
-    // Simulate Market Movement — allocation computed inside the updater to avoid stale closures
+    // ─── Account Switching ───
+    const switchAccount = useCallback((id: AccountId) => {
+        if (id === activeAccount) return;
+
+        // Save current account state
+        saveAccountState(activeAccount, { assets, pendingOrders, recycledToSui, journal });
+
+        // Load target account
+        const state = loadAccountState(id);
+        setActiveAccount(id);
+        setAssets(state.assets);
+        setPendingOrders(state.pendingOrders);
+        setRecycledToSui(state.recycledToSui);
+        setJournal(state.journal);
+
+        // Remember active account
+        saveToStorage(`${STORAGE_PREFIX}activeAccount`, id);
+    }, [activeAccount, assets, pendingOrders, recycledToSui, journal]);
+
+    // ─── Market Simulation ───
     useEffect(() => {
         const interval = setInterval(() => {
             setAssets(prev => {
                 const updated = prev.map(asset => {
                     if (asset.symbol === 'USD') return asset;
-
-                    const volatility = asset.symbol === 'SUI' ? 0.0005 : 0.001;
+                    const volatility = 0.0008;
                     const change = 1 + (Math.random() * volatility * 2 - volatility);
                     const newPrice = asset.currentPrice * change;
                     const newValue = asset.units * newPrice;
-
                     return {
                         ...asset,
                         currentPrice: newPrice,
@@ -131,24 +171,25 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
                 return updated.map(a => ({ ...a, allocation: (a.currentValue / freshTotal) * 100 }));
             });
         }, 5000);
-
         return () => clearInterval(interval);
-    }, []);
+    }, [activeAccount]); // restart sim on account switch
 
     // ─── Actions ───
 
     const recyclePnL = useCallback((symbol: string) => {
+        const anchorSymbol = activeAccount === 'sui' ? 'SUI' : null;
+        if (!anchorSymbol) return; // No recycle on alts account (no king)
+
         setAssets(prev => {
             const assetIndex = prev.findIndex(a => a.symbol === symbol);
-            const suiIndex = prev.findIndex(a => a.symbol === 'SUI');
-            if (assetIndex === -1 || suiIndex === -1) return prev;
+            const anchorIndex = prev.findIndex(a => a.symbol === anchorSymbol);
+            if (assetIndex === -1 || anchorIndex === -1) return prev;
 
             const asset = prev[assetIndex];
             const profit = Math.max(0, asset.gainLoss || 0);
             if (profit <= 0) return prev;
 
             const newAssets = [...prev];
-
             newAssets[assetIndex] = {
                 ...asset,
                 units: asset.units - (profit / asset.currentPrice),
@@ -157,18 +198,18 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
                 totalCost: asset.totalCost || 0
             };
 
-            const sui = newAssets[suiIndex];
-            newAssets[suiIndex] = {
-                ...sui,
-                units: sui.units + (profit / sui.currentPrice),
-                currentValue: sui.currentValue + profit,
-                totalCost: (sui.totalCost || 0) + profit
+            const anchor = newAssets[anchorIndex];
+            newAssets[anchorIndex] = {
+                ...anchor,
+                units: anchor.units + (profit / anchor.currentPrice),
+                currentValue: anchor.currentValue + profit,
+                totalCost: (anchor.totalCost || 0) + profit
             };
 
             setRecycledToSui(curr => curr + profit);
             return newAssets;
         });
-    }, []);
+    }, [activeAccount]);
 
     const killOrder = useCallback((id: string) => {
         setPendingOrders(prev => prev.filter(o => o.id !== id));
@@ -209,16 +250,20 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }, []);
 
     const resetToDefaults = useCallback(() => {
-        setAssets(PORTFOLIO_DATA.assets);
-        setPendingOrders(PORTFOLIO_DATA.pendingOrders);
-        setRecycledToSui(PORTFOLIO_DATA.recycledToSui || 0);
+        const seed = ACCOUNTS[activeAccount];
+        setAssets(seed.assets);
+        setPendingOrders(seed.pendingOrders);
+        setRecycledToSui(seed.recycledToSui || 0);
         setJournal([]);
-        Object.values(STORAGE_KEYS).forEach(key => localStorage.removeItem(key));
-    }, []);
+        // Clear localStorage for this account
+        ['assets', 'orders', 'recycled', 'journal'].forEach(key =>
+            localStorage.removeItem(storageKey(activeAccount, key))
+        );
+    }, [activeAccount]);
 
     const exportData = useCallback(() => {
-        return JSON.stringify({ assets, pendingOrders, recycledToSui, journal }, null, 2);
-    }, [assets, pendingOrders, recycledToSui, journal]);
+        return JSON.stringify({ activeAccount, assets, pendingOrders, recycledToSui, journal }, null, 2);
+    }, [activeAccount, assets, pendingOrders, recycledToSui, journal]);
 
     const importData = useCallback((json: string): boolean => {
         try {
@@ -235,6 +280,10 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
     return (
         <PortfolioContext.Provider value={{
+            activeAccount,
+            activeStrategy,
+            accountData,
+            switchAccount,
             totalValue,
             cashBalance,
             assets,

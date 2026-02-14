@@ -9,14 +9,18 @@ import PriceTicker from '@/components/PriceTicker';
 import PortfolioHealth from '@/components/PortfolioHealth';
 import TradeJournal from '@/components/TradeJournal';
 import { usePortfolio } from '@/context/PortfolioContext';
-import { STRATEGY } from '@/data/strategy';
+import { TAX_WRAPPER } from '@/data/strategy';
 
 export default function Home() {
   const [mounted, setMounted] = React.useState(false);
   const [syncTime, setSyncTime] = React.useState("");
-  const { assets } = usePortfolio();
-  const suiAsset = assets.find(a => a.symbol === 'SUI');
-  const suiWeight = suiAsset?.allocation?.toFixed(1) ?? '0.0';
+  const { assets, activeAccount, activeStrategy } = usePortfolio();
+
+  // Dynamic anchor metric
+  const anchorLabel = activeAccount === 'sui' ? 'Anchor Weight' : 'Cash Buffer';
+  const anchorValue = activeAccount === 'sui'
+    ? `${(assets.find(a => a.symbol === 'SUI')?.allocation || 0).toFixed(1)}% SUI`
+    : `${(assets.find(a => a.symbol === 'USD')?.allocation || 0).toFixed(1)}% Cash`;
 
   React.useEffect(() => {
     setMounted(true);
@@ -35,7 +39,7 @@ export default function Home() {
         <div className="flex items-center gap-2 lg:gap-4 flex-wrap">
           <span className="text-[10px] font-mono text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">MANUAL MODE</span>
           <div className="h-4 w-px bg-white/10 mx-2"></div>
-          <span className="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">{STRATEGY.taxWrapper}</span>
+          <span className="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">{TAX_WRAPPER}</span>
           <div className="h-4 w-px bg-white/10 mx-2"></div>
           <span className="text-[10px] font-mono text-gray-500 tracking-tighter lowercase opacity-50">
             last_sync: {mounted ? syncTime : "--:--:--"}
@@ -45,11 +49,11 @@ export default function Home() {
         <div className="flex items-center gap-6">
           <div className="hidden lg:flex items-center gap-3 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10">
             <span className="text-[10px] text-blue-400 font-black tracking-widest uppercase">Target Mask</span>
-            <span className="text-[11px] font-mono text-gray-400">{STRATEGY.targetMask}</span>
+            <span className="text-[11px] font-mono text-gray-400">{activeStrategy.targetMask}</span>
           </div>
           <div className="flex flex-col items-end">
-            <span className="text-[10px] text-gray-400 font-bold uppercase tracking-[0.2em] opacity-50">Anchor Weight</span>
-            <span className="text-sm font-black text-blue-400 tracking-tight">{suiWeight}% SUI</span>
+            <span className="text-[10px] text-gray-400 font-bold uppercase tracking-[0.2em] opacity-50">{anchorLabel}</span>
+            <span className="text-sm font-black text-blue-400 tracking-tight">{anchorValue}</span>
           </div>
         </div>
       </header>

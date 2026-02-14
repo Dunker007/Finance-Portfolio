@@ -1,29 +1,50 @@
 /**
- * SmartFolio Strategy Doctrine
- * ============================
- * Account: Roth Alto CryptoIRA (#82367)
- * Mode: MANUAL TRADING (Alto has no functional APIs)
- * Tax Wrapper: Roth IRA — all gains are tax-free
- * 
- * Primary Goal: Long-term compounding of SUI as the king asset.
- * Vibe: Aggressive but patient — SUI long bias + opportunistic alt swings.
+ * SmartFolio Strategy Doctrines
+ * =============================
+ * Two isolated Roth IRA accounts, each with their own trading philosophy.
+ * Both: Manual trading via Alto/Coinbase, 1% trade fee, spot only, tax-free gains.
  */
+import type { AccountId } from './portfolio';
 
-// ─── Allocation Targets (soft guidelines, not rigid) ───
-export const STRATEGY = {
+// ─── Shared Constants ───
+export const TRADE_FEE_PERCENT = 1.0;
+export const TAX_WRAPPER = 'Roth IRA (Tax-Free Gains)';
+export const EXECUTION_MODE = 'MANUAL' as const;
+export const EXECUTION_VIA = 'Coinbase Integration (CB-listed coins)';
+
+// ─── Strategy Interface ───
+export interface Strategy {
+    name: string;
+    accountLabel: string;
+    targetMask: string;
+    targets: {
+        cash: { min: number; ideal: number; max: number; label: string };
+        [key: string]: { min?: number; ideal?: number; max?: number; label: string };
+    };
+    rules: string[];
+    thresholds: {
+        profitTakeMin: number;
+        profitTakeMax: number;
+        dipEntryPercent: number;
+        cashCriticalBelow: number;
+        cashHealthyAbove: number;
+        maxConcentration: number;
+    };
+}
+
+// ═══════════════════════════════════════════════════
+// SUI ACCOUNT STRATEGY — Aggressive Growth, SUI King
+// ═══════════════════════════════════════════════════
+export const SUI_STRATEGY: Strategy = {
     name: 'Aggressive Growth — SUI Anchor',
-    mode: 'MANUAL' as const,
-    account: 'Roth Alto CryptoIRA (#82367)',
-    taxWrapper: 'Roth IRA (Tax-Free Gains)',
+    accountLabel: 'SUI Account (#82367)',
+    targetMask: '50:25:25 (SUI/ALT/USD)',
 
     targets: {
-        sui: { min: 40, ideal: 50, label: 'Core / King' },
-        alts: { max: 25, label: 'Tactical Swings' },
-        cash: { ideal: 25, critical: 10, label: 'USDC Dry Powder' },
+        sui: { min: 40, ideal: 50, max: 85, label: 'Core / King' },
+        alts: { min: 0, ideal: 25, max: 35, label: 'Tactical Swings' },
+        cash: { min: 10, ideal: 25, max: 40, label: 'USDC Dry Powder' },
     },
-
-    // Target mask string for header display
-    targetMask: '50:25:25 (SUI/ALT/USD)',
 
     rules: [
         'SUI is the anchor — never below ~40-45% without strong reason; compound over years.',
@@ -34,39 +55,67 @@ export const STRATEGY = {
         'No FOMO market buys — patience and limit orders only.',
     ],
 
-    // Action thresholds
     thresholds: {
-        altProfitTakeMin: 20,   // Minimum % gain to consider trimming an alt
-        altProfitTakeMax: 50,   // Strong trim zone
-        altDipEntryPercent: 10, // Enter alts on ~10% pullbacks
-        cashCriticalBelow: 10,  // Below this = "cash poor" emergency
-        cashHealthyAbove: 20,   // Above this = shift from recovery to accumulation
+        profitTakeMin: 20,
+        profitTakeMax: 50,
+        dipEntryPercent: 10,
+        cashCriticalBelow: 10,
+        cashHealthyAbove: 20,
+        maxConcentration: 85, // SUI can go high
+    },
+};
+
+// ═══════════════════════════════════════════════════
+// ALTS ACCOUNT STRATEGY — Balanced Alt Rotation
+// ═══════════════════════════════════════════════════
+export const ALTS_STRATEGY: Strategy = {
+    name: 'Balanced Alt Rotation — No King',
+    accountLabel: 'Alts Account (#82263)',
+    targetMask: '60-80:20-40 (ALTS/USD)',
+
+    targets: {
+        alts: { min: 50, ideal: 70, max: 80, label: 'Diversified Alts' },
+        cash: { min: 20, ideal: 30, max: 40, label: 'USDC Dry Powder' },
     },
 
-    // Trim strategy for SUI
-    suiTrimStrategy: {
-        description: 'Ladder exits at resistance levels during strength',
-        exampleSplit: {
-            suiDipBuysLater: 40, // % of proceeds
-            altSwings: 30,
-            cashReserve: 30,
-        }
-    }
-} as const;
+    rules: [
+        'No single king — balance risk across 4-8 alt positions evenly.',
+        'No alt should exceed ~20% of portfolio — rebalance on over-concentration.',
+        'Cash at 20-40% is the safety net — 32% is healthy, stay in range.',
+        'Swing trade dips → take profits at 30-100%+ moves → recycle to cash or new dips.',
+        'Ladder buys (deep dip + closer dip) and profit-target sells on every position.',
+        '1% trade fee — batch or ladder wisely, avoid churning small moves.',
+        'All inside Roth = tax-free compounding. No rush, patience pays.',
+    ],
 
-// ─── Allocation Status Calculator ───
+    thresholds: {
+        profitTakeMin: 30,
+        profitTakeMax: 100,
+        dipEntryPercent: 15,
+        cashCriticalBelow: 15,
+        cashHealthyAbove: 25,
+        maxConcentration: 20,
+    },
+};
+
+// ─── Strategy Registry ───
+export const STRATEGIES: Record<AccountId, Strategy> = {
+    sui: SUI_STRATEGY,
+    alts: ALTS_STRATEGY,
+};
+
+// ─── Health Calculators ───
 export type AllocationHealth = 'CRITICAL' | 'UNDER' | 'ON_TARGET' | 'OVER';
 
-export function getCashHealth(cashPercent: number): AllocationHealth {
-    if (cashPercent < STRATEGY.thresholds.cashCriticalBelow) return 'CRITICAL';
-    if (cashPercent < STRATEGY.targets.cash.ideal - 5) return 'UNDER';
-    if (cashPercent > STRATEGY.targets.cash.ideal + 5) return 'OVER';
+export function getCashHealth(cashPercent: number, strategy: Strategy): AllocationHealth {
+    if (cashPercent < strategy.thresholds.cashCriticalBelow) return 'CRITICAL';
+    if (cashPercent < strategy.thresholds.cashHealthyAbove) return 'UNDER';
+    if (cashPercent > (strategy.targets.cash.max ?? 40)) return 'OVER';
     return 'ON_TARGET';
 }
 
-export function getSuiHealth(suiPercent: number): AllocationHealth {
-    if (suiPercent < STRATEGY.targets.sui.min) return 'CRITICAL';
-    if (suiPercent < STRATEGY.targets.sui.ideal - 5) return 'UNDER';
-    if (suiPercent > STRATEGY.targets.sui.ideal + 15) return 'OVER';
+export function getAssetHealth(percent: number, maxConcentration: number): AllocationHealth {
+    if (percent > maxConcentration + 5) return 'OVER';
+    if (percent > maxConcentration) return 'ON_TARGET';
     return 'ON_TARGET';
 }

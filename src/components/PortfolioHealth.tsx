@@ -1,20 +1,14 @@
 "use client";
 import React from 'react';
 import { usePortfolio } from '../context/PortfolioContext';
-import { STRATEGY, getSuiHealth, getCashHealth } from '../data/strategy';
+import { getCashHealth } from '../data/strategy';
 
 export default function PortfolioHealth() {
-    const { assets } = usePortfolio();
-    const totalValue = assets.reduce((s, a) => s + a.currentValue, 0);
+    const { assets, activeAccount, activeStrategy } = usePortfolio();
 
-    const suiPercent = assets.find(a => a.symbol === 'SUI')?.allocation || 0;
     const cashPercent = assets.find(a => a.symbol === 'USD')?.allocation || 0;
-    const altPercent = 100 - suiPercent - cashPercent;
-
-    const suiHealth = getSuiHealth(suiPercent);
-    const cashHealth = getCashHealth(cashPercent);
-    const altTarget = STRATEGY.targets.alts.max;
-    const altHealth = altPercent > altTarget + 5 ? 'OVER' : altPercent < altTarget - 10 ? 'UNDER' : 'ON_TARGET';
+    const altAssets = assets.filter(a => a.symbol !== 'USD');
+    const cashHealth = getCashHealth(cashPercent, activeStrategy);
 
     const getHealthColor = (h: string) => {
         if (h === 'CRITICAL') return { bar: 'bg-rose-500', text: 'text-rose-400', glow: 'shadow-[0_0_10px_rgba(239,68,68,0.3)]', label: '⚠ CRITICAL' };
@@ -23,29 +17,59 @@ export default function PortfolioHealth() {
         return { bar: 'bg-emerald-500', text: 'text-emerald-400', glow: 'shadow-[0_0_10px_rgba(16,185,129,0.3)]', label: 'ON TARGET' };
     };
 
-    const gauges = [
-        {
+    // Build gauges dynamically per account
+    const gauges: { label: string; current: number; target: number; health: string; icon: string }[] = [];
+
+    if (activeAccount === 'sui') {
+        const suiPercent = assets.find(a => a.symbol === 'SUI')?.allocation || 0;
+        const altPercent = 100 - suiPercent - cashPercent;
+
+        gauges.push({
             label: 'SUI Anchor',
             current: suiPercent,
-            target: STRATEGY.targets.sui.ideal,
-            health: suiHealth,
+            target: activeStrategy.targets.sui?.ideal || 50,
+            health: suiPercent < 40 ? 'CRITICAL' : suiPercent < 45 ? 'UNDER' : suiPercent > 65 ? 'OVER' : 'ON_TARGET',
             icon: '👑',
-        },
-        {
+        });
+        gauges.push({
             label: 'Alt Exposure',
             current: altPercent,
-            target: altTarget,
-            health: altHealth,
+            target: activeStrategy.targets.alts?.ideal || 25,
+            health: altPercent > 30 ? 'OVER' : altPercent < 15 ? 'UNDER' : 'ON_TARGET',
             icon: '🔄',
-        },
-        {
-            label: 'Cash Reserve',
-            current: cashPercent,
-            target: STRATEGY.targets.cash.ideal,
-            health: cashHealth,
-            icon: '🛡️',
-        },
-    ];
+        });
+    } else {
+        // Alts account: show each coin's weight + concentration check
+        const maxConcentration = activeStrategy.thresholds.maxConcentration;
+        const coinPercent = altAssets.reduce((s, a) => s + a.allocation, 0);
+        const avgTarget = altAssets.length > 0 ? (100 - activeStrategy.targets.cash.ideal) / altAssets.length : 16;
+
+        gauges.push({
+            label: 'Alt Exposure',
+            current: coinPercent,
+            target: activeStrategy.targets.alts?.ideal || 70,
+            health: coinPercent > 80 ? 'OVER' : coinPercent < 50 ? 'UNDER' : 'ON_TARGET',
+            icon: '🔄',
+        });
+
+        // Check largest position for over-concentration
+        const largest = altAssets.reduce((max, a) => a.allocation > (max?.allocation || 0) ? a : max, altAssets[0]);
+        gauges.push({
+            label: `Top Weight (${largest?.symbol || '—'})`,
+            current: largest?.allocation || 0,
+            target: maxConcentration,
+            health: (largest?.allocation || 0) > maxConcentration ? 'OVER' : 'ON_TARGET',
+            icon: '📊',
+        });
+    }
+
+    gauges.push({
+        label: 'Cash Reserve',
+        current: cashPercent,
+        target: activeStrategy.targets.cash.ideal,
+        health: cashHealth,
+        icon: '🛡️',
+    });
 
     return (
         <div className="flex flex-col gap-3">
@@ -54,7 +78,7 @@ export default function PortfolioHealth() {
                     Portfolio Health
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
                 </h3>
-                <span className="text-[10px] text-gray-600 font-mono">vs {STRATEGY.targetMask}</span>
+                <span className="text-[10px] text-gray-600 font-mono">vs {activeStrategy.targetMask}</span>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -65,7 +89,6 @@ export default function PortfolioHealth() {
 
                     return (
                         <div key={g.label} className="p-4 rounded-xl border border-white/5 bg-white/[0.02] hover:bg-white/[0.04] transition-all group relative overflow-hidden">
-                            {/* Background glow */}
                             <div className={`absolute -right-4 -top-4 w-16 h-16 rounded-full blur-2xl opacity-10 group-hover:opacity-20 transition-opacity ${styles.bar}`}></div>
 
                             <div className="flex items-center justify-between mb-3 relative z-10">
@@ -88,13 +111,11 @@ export default function PortfolioHealth() {
                                 </div>
                             </div>
 
-                            {/* Progress Bar */}
                             <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden relative z-10">
                                 <div
                                     className={`h-full ${styles.bar} ${styles.glow} transition-all duration-1000 rounded-full`}
                                     style={{ width: `${Math.min(g.current, 100)}%` }}
                                 ></div>
-                                {/* Target marker */}
                                 <div
                                     className="absolute top-0 h-full w-0.5 bg-white/30"
                                     style={{ left: `${g.target}%` }}
