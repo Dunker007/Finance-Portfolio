@@ -7,7 +7,7 @@ import { TRADE_FEE_PERCENT } from '../data/strategy';
 const currency = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
 
 export default function TradeJournal() {
-    const { journal, addJournalEntry, addOrder, exportData, importData, resetToDefaults, assets, pendingOrders } = usePortfolio();
+    const { journal, addJournalEntry, removeJournalEntry, addOrder, exportData, importData, resetToDefaults, assets, pendingOrders } = usePortfolio();
     const SYMBOLS = assets.map(a => a.symbol);
     const [isOpen, setIsOpen] = useState(false);
     const [isImportOpen, setIsImportOpen] = useState(false);
@@ -442,7 +442,16 @@ export default function TradeJournal() {
                                         return `${net > 0 ? '+' : ''}${currency.format(net)}`;
                                     })()}
                                 </span>
-                                <span className="text-[8px] text-gray-600 font-mono">{formatTime(entry.timestamp)}</span>
+                                <div className="flex items-center gap-2">
+                                    <span className="text-[8px] text-gray-600 font-mono">{formatTime(entry.timestamp)}</span>
+                                    <button
+                                        onClick={(e) => { e.stopPropagation(); if (confirm('Delete this entry?')) removeJournalEntry(entry.id); }}
+                                        className="opacity-0 group-hover:opacity-100 text-[10px] text-gray-600 hover:text-rose-500 transition-all"
+                                        title="Delete Entry"
+                                    >
+                                        ✕
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     ))

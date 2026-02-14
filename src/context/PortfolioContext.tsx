@@ -1,7 +1,7 @@
 "use client";
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { ACCOUNTS, AccountId, Asset, Order, AccountData, JournalEntry } from '../data/portfolio';
-import { STRATEGIES, Strategy } from '../data/strategy';
+import { STRATEGIES, Strategy, TRADE_FEE_PERCENT } from '../data/strategy';
 
 // ─── localStorage helpers ───
 const STORAGE_PREFIX = 'smartfolio_';
@@ -56,6 +56,7 @@ interface PortfolioContextType {
     killOrder: (orderId: string) => void;
     addOrder: (order: Omit<Order, 'status' | 'id' | 'date'> & { status?: 'open' | 'filled' | 'cancelled'; date?: string; id?: string }) => void;
     addJournalEntry: (entry: Omit<JournalEntry, 'id' | 'timestamp'> & { id?: string; timestamp?: string }) => void;
+    removeJournalEntry: (id: string) => void;
     resetToDefaults: () => void;
     exportData: () => string;
     importData: (json: string) => boolean;
@@ -261,14 +262,63 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
     const addJournalEntry = useCallback((entry: Omit<JournalEntry, 'id' | 'timestamp'> & { id?: string; timestamp?: string }) => {
         const newEntry: JournalEntry = {
-            id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
-            timestamp: new Date().toISOString(),
+            id: entry.id || Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+            timestamp: entry.timestamp || new Date().toISOString(),
             ...entry,
         };
+
+        // 1. Update Journal Log
         setJournal(prev => {
             if (prev.some(e => e.id === newEntry.id)) return prev; // Dedup
             return [newEntry, ...prev];
         });
+
+        // 2. Execute Trade against Portfolio State (if price/units exist)
+        if (newEntry.units && newEntry.price) {
+            setAssets(currentAssets => {
+                const assetIndex = currentAssets.findIndex(a => a.symbol === newEntry.symbol);
+                const cashIndex = currentAssets.findIndex(a => a.symbol === 'USD');
+                if (assetIndex === -1 || cashIndex === -1) return currentAssets; // Safety check
+
+                const next = [...currentAssets];
+                const asset = next[assetIndex];
+                const cash = next[cashIndex];
+
+                const gross = newEntry.units! * newEntry.price!;
+                // Use global constant
+                const feePercent = TRADE_FEE_PERCENT;
+                const fee = gross * (feePercent / 100);
+
+                if (newEntry.type === 'buy') {
+                    // BUY: Asset +, Cash -
+                    const cost = gross + fee;
+                    next[cashIndex] = { ...cash, currentValue: cash.currentValue - cost, units: cash.units - cost };
+                    next[assetIndex] = {
+                        ...asset,
+                        units: asset.units + newEntry.units!,
+                        currentValue: (asset.units + newEntry.units!) * asset.currentPrice,
+                        totalCost: (asset.totalCost || 0) + cost
+                    };
+                } else if (newEntry.type === 'sell') {
+                    // SELL: Asset -, Cash +
+                    const proceeds = gross - fee;
+                    next[cashIndex] = { ...cash, currentValue: cash.currentValue + proceeds, units: cash.units + proceeds };
+                    next[assetIndex] = {
+                        ...asset,
+                        units: Math.max(0, asset.units - newEntry.units!),
+                        currentValue: Math.max(0, asset.units - newEntry.units!) * asset.currentPrice,
+                        // Proportional cost basis reduction
+                        totalCost: asset.units > 0 ? (asset.totalCost || 0) * (Math.max(0, asset.units - newEntry.units!) / asset.units) : 0
+                    };
+                }
+
+                return next;
+            });
+        }
+    }, []);
+
+    const removeJournalEntry = useCallback((id: string) => {
+        setJournal(prev => prev.filter(e => e.id !== id));
     }, []);
 
     const resetToDefaults = useCallback(() => {
@@ -322,6 +372,7 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
             killOrder,
             addOrder,
             addJournalEntry,
+            removeJournalEntry,
             resetToDefaults,
             exportData,
             importData,
