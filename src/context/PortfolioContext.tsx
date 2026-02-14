@@ -59,6 +59,8 @@ interface PortfolioContextType {
     removeJournalEntry: (id: string) => void;
     syncAssetBalance: (symbol: string, units: number) => void;
     resetToDefaults: () => void;
+    isLiveMode: boolean;
+    toggleLiveMode: () => void;
     exportData: () => string;
     importData: (json: string) => boolean;
     marketCondition: 'accumulation' | 'bull' | 'bear' | 'distribution' | 'choppiness';
@@ -157,7 +159,18 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         saveToStorage(`${STORAGE_PREFIX}activeAccount`, id);
     }, [activeAccount, assets, pendingOrders, recycledToSui, journal, targetValue]);
 
-    // ─── Market Simulation ───
+    // ─── Market Simulation & Live Mode ───
+    const [isLiveMode, setIsLiveMode] = useState(false);
+
+    // Auto-Reload (60s) if Live Mode is active
+    useEffect(() => {
+        if (!isLiveMode) return;
+        const interval = setInterval(() => {
+            if (typeof window !== 'undefined') window.location.reload();
+        }, 60000); // 60s
+        return () => clearInterval(interval);
+    }, [isLiveMode]);
+
     useEffect(() => {
         const interval = setInterval(() => {
             setAssets(prev => {
@@ -367,8 +380,11 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         });
     }, []);
 
+    const toggleLiveMode = useCallback(() => setIsLiveMode(p => !p), []);
+
     const resetToDefaults = useCallback(() => {
         const seed = ACCOUNTS[activeAccount];
+        // ... (existing logic)
         setAssets(seed.assets);
         setPendingOrders(seed.pendingOrders);
         setRecycledToSui(seed.recycledToSui || 0);
@@ -380,6 +396,7 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         );
     }, [activeAccount]);
 
+    // ... (export/import logic)
     const exportData = useCallback(() => {
         return JSON.stringify({ activeAccount, assets, pendingOrders, recycledToSui, journal }, null, 2);
     }, [activeAccount, assets, pendingOrders, recycledToSui, journal]);
@@ -421,6 +438,8 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
             removeJournalEntry,
             syncAssetBalance,
             resetToDefaults,
+            isLiveMode,
+            toggleLiveMode,
             exportData,
             importData,
             marketCondition,

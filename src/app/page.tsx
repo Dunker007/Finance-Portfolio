@@ -13,7 +13,7 @@ import { TAX_WRAPPER } from '@/data/strategy';
 export default function Home() {
   const [mounted, setMounted] = React.useState(false);
   const [syncTime, setSyncTime] = React.useState("");
-  const { assets, activeAccount, activeStrategy } = usePortfolio();
+  const { assets, activeAccount, activeStrategy, isLiveMode, toggleLiveMode } = usePortfolio();
 
   // Dynamic anchor metric
   const anchorLabel = activeAccount === 'sui' ? 'Anchor Weight' : 'Cash Buffer';
@@ -24,6 +24,8 @@ export default function Home() {
   React.useEffect(() => {
     setMounted(true);
     setSyncTime(new Date().toLocaleTimeString());
+    // "Scroll into place" -> Reset scroll on load/refresh
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   }, []);
 
   return (
@@ -36,7 +38,15 @@ export default function Home() {
 
       <header className="h-16 flex items-center justify-between px-4 pl-16 lg:pl-8 lg:px-8 glass-panel z-50 shrink-0 border-b border-white/5 bg-black/40">
         <div className="flex items-center gap-2 lg:gap-4 flex-wrap">
-          <span className="text-[10px] font-mono text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">MANUAL MODE</span>
+          <button
+            onClick={toggleLiveMode}
+            className={`text-[10px] font-mono px-2 py-0.5 rounded border transition-all uppercase tracking-wider ${isLiveMode
+              ? 'text-rose-400 bg-rose-500/10 border-rose-500/20 animate-pulse font-bold'
+              : 'text-amber-400 bg-amber-500/10 border-amber-500/20'
+              }`}
+          >
+            {isLiveMode ? 'LIVE SYNC (60s)' : 'MANUAL MODE'}
+          </button>
           <div className="h-4 w-px bg-white/10 mx-2"></div>
           <span className="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">{TAX_WRAPPER}</span>
           <div className="h-4 w-px bg-white/10 mx-2"></div>
@@ -57,7 +67,7 @@ export default function Home() {
         </div>
       </header>
 
-      <main className="flex-1 overflow-y-auto p-6 space-y-6 relative z-10 scroll-smooth custom-scrollbar">
+      <main className="flex-1 overflow-y-auto p-6 space-y-6 relative z-10 scroll-smooth scrollbar-hide">
         {/* Top Metrics Row */}
         <section className="animate-fade-in-up">
           <DetailedMetrics />
