@@ -1,5 +1,6 @@
 "use client";
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { useState } from 'react';
 
 import { usePortfolio } from '../context/PortfolioContext';
@@ -8,6 +9,7 @@ import { ACCOUNTS, AccountId } from '../data/portfolio';
 const currency = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0 });
 
 const Sidebar = () => {
+    const pathname = usePathname();
     const { assets, activeAccount, switchAccount, activeStrategy } = usePortfolio();
     const [isOpen, setIsOpen] = useState(false);
 
@@ -114,10 +116,10 @@ const Sidebar = () => {
 
                 {/* Nav */}
                 <nav className="flex-1 px-4 space-y-1">
-                    <NavItem icon="📊" label="Strategic Hub" active onClick={() => setIsOpen(false)} />
-                    <NavItem icon="🗺️" label="Asset Roadmap" onClick={() => setIsOpen(false)} />
-                    <NavItem icon="🛡️" label="Risk Guard" onClick={() => setIsOpen(false)} />
-                    <NavItem icon="🤖" label="AI Insight" onClick={() => setIsOpen(false)} />
+                    <NavItem icon="📊" label="Strategic Hub" href="/" active={pathname === '/'} onClick={() => setIsOpen(false)} />
+                    <NavItem icon="🛒" label="Order Builder" href="/orders" active={pathname === '/orders'} onClick={() => setIsOpen(false)} />
+                    <NavItem icon="🛡️" label="Risk Guard" href="/risk" active={pathname === '/risk'} onClick={() => setIsOpen(false)} />
+                    <NavItem icon="📋" label="Portfolio Report" href="/report" active={pathname === '/report'} onClick={() => setIsOpen(false)} />
                 </nav>
 
                 {/* Strategy Pulse */}
@@ -160,8 +162,8 @@ const Sidebar = () => {
     );
 };
 
-const NavItem = ({ icon, label, active, onClick }: { icon: string; label: string; active?: boolean; onClick?: () => void }) => (
-    <Link href="#" onClick={onClick} className={`flex items-center gap-3 px-4 py-2 rounded-lg transition-colors ${active ? 'bg-white/5 text-white' : 'text-gray-400 hover:bg-white/5'}`}>
+const NavItem = ({ icon, label, href, active, onClick }: { icon: string; label: string; href: string; active?: boolean; onClick?: () => void }) => (
+    <Link href={href} onClick={onClick} className={`flex items-center gap-3 px-4 py-2 rounded-lg transition-colors ${active ? 'bg-white/5 text-white' : 'text-gray-400 hover:bg-white/5'}`}>
         <span className="text-lg">{icon}</span>
         <span className="text-sm font-medium">{label}</span>
     </Link>

@@ -60,6 +60,7 @@ interface PortfolioContextType {
     recyclePnL: (symbol: string) => void;
     fillOrder: (orderId: string) => void;
     killOrder: (orderId: string) => void;
+    addOrder: (order: Omit<Order, 'id' | 'status' | 'date'>) => void;
     addJournalEntry: (entry: Omit<JournalEntry, 'id' | 'timestamp'>) => void;
     resetToDefaults: () => void;
     exportData: () => string;
@@ -215,6 +216,16 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         setPendingOrders(prev => prev.filter(o => o.id !== id));
     }, []);
 
+    const addOrder = useCallback((order: Omit<Order, 'id' | 'status' | 'date'>) => {
+        const newOrder: Order = {
+            ...order,
+            id: `${order.symbol}-${order.type}-${Date.now()}`,
+            status: 'open',
+            date: new Date().toISOString().split('T')[0],
+        };
+        setPendingOrders(prev => [...prev, newOrder]);
+    }, []);
+
     const fillOrder = useCallback((id: string) => {
         const order = pendingOrders.find(o => o.id === id);
         if (!order) return;
@@ -295,6 +306,7 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
             recyclePnL,
             fillOrder,
             killOrder,
+            addOrder,
             addJournalEntry,
             resetToDefaults,
             exportData,
