@@ -8,7 +8,7 @@ const currency = new Intl.NumberFormat('en-US', { style: 'currency', currency: '
 const fmtPercent = (n: number) => n.toFixed(2) + '%';
 
 export default function AssetTable() {
-    const { assets, pendingOrders, recyclePnL, fillOrder, killOrder, activeAccount, activeStrategy } = usePortfolio();
+    const { assets, pendingOrders, fillOrder, killOrder, activeAccount, activeStrategy } = usePortfolio();
     const [expandedSymbol, setExpandedSymbol] = useState<string | null>(null);
 
     const getStrategyBadge = (symbol: string) => {
@@ -19,7 +19,7 @@ export default function AssetTable() {
     };
 
     const sortedAssets = [...assets].sort((a, b) => b.currentValue - a.currentValue);
-    const canRecycle = activeAccount === 'sui';
+
 
     return (
         <div className="w-full h-full flex flex-col">
@@ -51,7 +51,8 @@ export default function AssetTable() {
                             const logoUrl = asset.logo || LOGO_MAPPING[asset.symbol];
                             const badge = getStrategyBadge(asset.symbol);
                             const isAnchor = activeAccount === 'sui' && asset.symbol === 'SUI';
-                            const showRecycle = canRecycle && asset.symbol !== 'SUI' && asset.symbol !== 'USD' && (asset.gainLoss || 0) > 0;
+                            const pnlPercent = asset.totalCost && asset.totalCost > 0 ? ((asset.gainLoss || 0) / asset.totalCost) * 100 : 0;
+                            const showTakeProfit = asset.symbol !== 'USD' && pnlPercent >= 25;
                             const overConcentrated = activeAccount === 'alts' && asset.symbol !== 'USD' && asset.allocation > activeStrategy.thresholds.maxConcentration;
                             const isExpanded = expandedSymbol === asset.symbol;
                             const symbolOrders = pendingOrders.filter(o => o.symbol === asset.symbol);
@@ -114,13 +115,13 @@ export default function AssetTable() {
                                         </td>
                                         <td className="p-4 text-right">
                                             <div className="flex items-center justify-end gap-3">
-                                                {showRecycle && (
-                                                    <button
-                                                        onClick={(e) => { e.stopPropagation(); recyclePnL(asset.symbol); }}
-                                                        className="text-[9px] font-black bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-2 py-1 rounded hover:bg-emerald-500 hover:text-black transition-all uppercase tracking-tighter animate-pulse"
+                                                {showTakeProfit && (
+                                                    <span
+                                                        className="text-[8px] font-black bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-1.5 py-0.5 rounded uppercase tracking-tighter"
+                                                        title={`+${pnlPercent.toFixed(0)}% — Consider taking profit`}
                                                     >
-                                                        Recycle → SUI
-                                                    </button>
+                                                        💰 Take Profit?
+                                                    </span>
                                                 )}
                                                 <div className={`flex flex-col items-end ${(asset.gainLoss || 0) >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
                                                     <span className="text-xs font-mono font-bold">
