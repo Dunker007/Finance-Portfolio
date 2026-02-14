@@ -310,19 +310,58 @@ export default function OrderBuilderPage() {
                                 />
                             </div>
 
-                            {/* Submit */}
-                            <button
-                                onClick={handleSubmitOrder}
-                                disabled={!symbol || !previewUnits || !previewPrice}
-                                className={`w-full py-3 rounded-xl text-sm font-black uppercase tracking-widest transition-all border ${symbol && previewUnits && previewPrice
-                                    ? orderType === 'buy'
-                                        ? 'bg-emerald-600 hover:bg-emerald-500 text-white border-emerald-500'
-                                        : 'bg-rose-600 hover:bg-rose-500 text-white border-rose-500'
-                                    : 'bg-white/5 text-gray-600 border-white/10 cursor-not-allowed'
-                                    }`}
-                            >
-                                Stage {orderType === 'buy' ? 'Buy' : 'Sell'} Order
-                            </button>
+                            {/* Submit Row */}
+                            <div className="flex gap-2">
+                                <button
+                                    onClick={handleSubmitOrder}
+                                    disabled={!symbol || !previewUnits || !previewPrice}
+                                    className={`flex-1 py-3 rounded-xl text-sm font-black uppercase tracking-widest transition-all border ${symbol && previewUnits && previewPrice
+                                        ? orderType === 'buy'
+                                            ? 'bg-emerald-600 hover:bg-emerald-500 text-white border-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.2)]'
+                                            : 'bg-rose-600 hover:bg-rose-500 text-white border-rose-500 shadow-[0_0_15px_rgba(244,63,94,0.2)]'
+                                        : 'bg-white/5 text-gray-600 border-white/10 cursor-not-allowed'
+                                        }`}
+                                >
+                                    Stage {orderType === 'buy' ? 'Buy' : 'Sell'} Order
+                                </button>
+
+                                {orderType === 'buy' && (
+                                    <button
+                                        onClick={() => {
+                                            const total = parseFloat(units);
+                                            // Smart Entry requires Symbol + Units. Price is optional (defaults to spot).
+                                            if (!symbol || !total) return;
+
+                                            const asset = assets.find(a => a.symbol === symbol);
+                                            const spot = asset?.currentPrice || 0;
+                                            const basePrice = parseFloat(price) || spot;
+                                            if (!basePrice) return;
+
+                                            // 1. Initial 50% @ Base
+                                            addOrder({ type: 'buy', symbol, units: total * 0.50, price: basePrice, note: 'Smart Entry: Initial (50%)' });
+
+                                            // 2. DCA 1 (25%) @ -12.5% (Mid of 10-15%)
+                                            const p1 = parseFloat((basePrice * 0.875).toFixed(basePrice < 1 ? 6 : 4));
+                                            addOrder({ type: 'buy', symbol, units: total * 0.25, price: p1, note: 'Smart Entry: DCA 1 (-12.5%)' });
+
+                                            // 3. DCA 2 (25%) @ -25% (Mid of 20-30%)
+                                            const p2 = parseFloat((basePrice * 0.75).toFixed(basePrice < 1 ? 6 : 4));
+                                            addOrder({ type: 'buy', symbol, units: total * 0.25, price: p2, note: 'Smart Entry: DCA 2 (-25%)' });
+
+                                            setUnits(''); setPrice(''); setNote('');
+                                        }}
+                                        disabled={!symbol || !previewUnits}
+                                        className={`px-3 py-1 rounded-xl border transition-all text-[9px] font-black uppercase tracking-widest flex flex-col items-center justify-center leading-tight min-w-[80px] ${symbol && previewUnits
+                                                ? 'bg-blue-500/10 border-blue-500/30 text-blue-400 hover:bg-blue-500 hover:text-white cursor-pointer shadow-[0_0_10px_rgba(59,130,246,0.1)]'
+                                                : 'bg-white/5 border-white/5 text-gray-600 cursor-not-allowed'
+                                            }`}
+                                        title="Split: 50% @ Price, 25% @ -12.5%, 25% @ -25%"
+                                    >
+                                        <span>Smart</span>
+                                        <span className="opacity-70 text-[8px]">50/25/25</span>
+                                    </button>
+                                )}
+                            </div>
                         </div>
 
                         {/* Fee preview panel */}
